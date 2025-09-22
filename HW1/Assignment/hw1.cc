@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 
             /* Early Exit */
             int done = 0;
-            if (phase >= numtasks / 2 && phase % 2) done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
+            if (phase >= numtasks / 2) done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
             if (done) break;
         }
     }
