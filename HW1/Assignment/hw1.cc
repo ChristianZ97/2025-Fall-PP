@@ -18,9 +18,9 @@
 
 /* Function Prototypes */
 void local_sort(float local_data[], const int my_count);
-void merge_sort_split(float *local_data, const int my_count, float *recv_data, const int recv_count, float *temp, const int is_left);
+//void merge_sort_split(float *local_data, const int my_count, float *recv_data, const int recv_count, float *temp, const int is_left);
 const int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, MPI_Comm comm);
-
+void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left);
 
 /* Main Function */
 int main(int argc, char *argv[]) {
@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
 
     if (is_active) {
 
+        /*
         const size_t local_size = ((my_count * sizeof(float) + 31) / 32) * 32;
         local_data = (float *)aligned_alloc(32, local_size);
         if (!local_data) local_data = (float *)malloc(my_count * sizeof(float));
@@ -82,6 +83,12 @@ int main(int argc, char *argv[]) {
         const size_t temp_size = ((max_temp_count * sizeof(float) + 31) / 32) * 32;
         temp = (float *)aligned_alloc(32, temp_size);
         if (!temp) temp = (float *)malloc(max_temp_count * sizeof(float));
+        */
+
+        const size_t size = (((base_chunk_size + 1) * 2 * sizeof(float) + 31) / 32) * 32;
+        local_data = (float *)aligned_alloc(32, size);
+        recv_data = (float *)aligned_alloc(32, size);
+        temp = (float *)aligned_alloc(32, size);
 
         MPI_File_open(active_comm, input_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &input_file);
         MPI_File_read_at(input_file, my_start_index * sizeof(float), local_data, my_count, MPI_FLOAT, MPI_STATUS_IGNORE);
@@ -166,6 +173,8 @@ void local_sort(float local_data[], const int my_count) {
     else boost::sort::spreadsort::float_sort(local_data, local_data + my_count);
 }
 
+
+/*
 void merge_sort_split(float *local_data, const int my_count, float *recv_data, const int recv_count, float *temp, const int is_left) {
 
     if (my_count < 1 || recv_count < 1) return;
@@ -175,6 +184,18 @@ void merge_sort_split(float *local_data, const int my_count, float *recv_data, c
     if (is_left) memcpy(local_data, temp, my_count * sizeof(float));
     else memcpy(local_data, temp + recv_count, my_count * sizeof(float));
 }
+*/
+
+void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left) {
+
+    if (my_count < 1 || recv_count < 1) return;
+
+    std::merge(local_data, local_data + my_count, recv_data, recv_data + recv_count, temp);
+    
+    if (is_left) std::swap(local_data, temp);
+    else std::copy(temp + recv_count, temp + recv_count + my_count, local_data);
+}
+
 
 const int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, MPI_Comm comm) {
 
