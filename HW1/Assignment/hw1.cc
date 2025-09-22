@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 #include <boost/sort/spreadsort/spreadsort.hpp>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -58,7 +59,6 @@ int main(int argc, char *argv[]) {
     const int my_start_index = my_rank * base_chunk_size + min(my_rank, remainder);
     const int is_active = (active_comm != MPI_COMM_NULL) && (my_count > 0);
     const int max_phases = numtasks + (numtasks / 2);
-    int done = 0;
 
     MPI_File input_file, output_file;
     const char *const input_filename = argv[2];
@@ -115,6 +115,7 @@ int main(int argc, char *argv[]) {
             }
 
             /* Early Exit */
+            int done = 0;
             if (phase >= numtasks / 2 && phase % 2) done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
             if (done) break;
         }
@@ -170,15 +171,7 @@ void merge_sort_split(float *local_data, const int my_count, float *recv_data, c
 
     if (my_count < 1 || recv_count < 1) return;
 
-    int i = 0, j = 0, k = 0;
-    while (i < my_count && j < recv_count) {
-
-        if (local_data[i] <= recv_data[j]) temp[k++] = local_data[i++];    
-        else temp[k++] = recv_data[j++];
-    }
-
-    while (i < my_count) temp[k++] = local_data[i++];
-    while (j < recv_count) temp[k++] = recv_data[j++];
+    std::merge(local_data, local_data + my_count, recv_data, recv_data + recv_count, temp);
 
     if (is_left) memcpy(local_data, temp, my_count * sizeof(float));
     else memcpy(local_data, temp + recv_count, my_count * sizeof(float));
@@ -186,19 +179,21 @@ void merge_sort_split(float *local_data, const int my_count, float *recv_data, c
 
 const int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, MPI_Comm comm) {
 
+    const int mpi_tag = 0;
     const int prev_rank = (my_rank > 0) ? my_rank - 1 : MPI_PROC_NULL;
     const int next_rank = (my_rank < numtasks - 1) ? my_rank + 1 : MPI_PROC_NULL;
-    const int mpi_tag = 0;
     const float my_last_element = (my_count > 0) ? local_data[my_count - 1] : -1.0f;
     int boundary_sorted = 1;
     int global_sorted;
     float prev_last_element;
 
+    // We don't check MPI_PROC_NULL, since comm. cost can be ignore.
     MPI_Sendrecv(&my_last_element, 1, MPI_FLOAT, next_rank, mpi_tag,
                  &prev_last_element, 1, MPI_FLOAT, prev_rank, mpi_tag,
                  comm, MPI_STATUS_IGNORE);
 
-    if (my_count > 0 && my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
+    // From right process's perspective
+    if (my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
     
     return global_sorted;
