@@ -1,5 +1,5 @@
 /**
- * Parallel Odd-Even Sort using MPI (Highly Optimized - Final Version)
+ * Parallel Odd-Even Sort using MPI
  * CS542200 Parallel Programming - Homework 1
  *
  * ============================================================================
@@ -26,22 +26,23 @@
  * ============================================================================
  * Key Optimizations for Demonstration:
  * ============================================================================
- * 1. Zero-Copy Merge-Split: The cornerstone of this implementation. It uses a custom
+ * 1. Conditional Merge-Split: A massive optimization that avoids unnecessary work.
+ *    Before performing a full data exchange and merge, processes first exchange
+ *    only their boundary elements (a single float). The expensive merge-split
+ *    operation is completely skipped if the boundary data is already in order.
+ * 2. Zero-Copy Merge-Split: The cornerstone of this implementation. It uses a custom
  *    partial merge and an O(1) pointer swap (std::swap) to completely eliminate
  *    memory copy overhead in the merge step, significantly reducing memory bandwidth
  *    and CPU cycles.
- * 2. Adaptive Local Sort: A smart sorting strategy that employs different algorithms
+ * 3. Adaptive Local Sort: A smart sorting strategy that employs different algorithms
  *    (Insertion Sort, std::sort, boost::spreadsort) based on the local data size.
  *    This ensures the best sorting performance for any data partition size.
- * 3. Aligned Memory Allocation: Uses aligned_alloc to ensure data buffers are
+ * 4. Aligned Memory Allocation: Uses aligned_alloc to ensure data buffers are
  *    32-byte aligned. This is a crucial micro-optimization that can significantly
  *    improve performance for modern CPUs by enabling more efficient SIMD instructions.
- * 4. Efficient Early Exit: A global sortedness check is performed periodically after
+ * 5. Efficient Early Exit: A global sortedness check is performed periodically after
  *    a sufficient number of phases. This avoids unnecessary computation and communication
  *    by terminating the sort as soon as the data is globally ordered.
- * 5. CPU Cache Prefetching: Actively hints the CPU to pre-load data into the cache
- *    right before it is accessed in the merge loop. This technique helps to hide
- *    memory latency, one of the major bottlenecks in data-intensive computations.
  */
 
 /* Headers */
@@ -95,6 +96,8 @@ int main(int argc, char *argv[]) {
     const int my_start_index = my_rank * base_chunk_size + min(my_rank, remainder);
     const int is_active = (active_comm != MPI_COMM_NULL) && (my_count > 0);
     const int max_phases = numtasks + (numtasks / 2);
+    const int is_odd_rank = (my_rank % 2) ? 1 : 0;
+    float partner_boundary;
 
     MPI_File input_file, output_file;
     const char *const input_filename = argv[2];
@@ -133,32 +136,64 @@ int main(int argc, char *argv[]) {
 
         for (int phase = 0; phase < max_phases; phase++) {
 
+            const int is_odd_phase = (phase % 2) ? 1 : 0;
+            const float my_first = local_data[0];
+            const float my_last = local_data[my_count - 1];
+
             /* Partner ID */
             int partner = -1;
-            if (phase % 2) partner = (my_rank % 2) ? my_rank + 1 : my_rank - 1;
-            else partner = (my_rank % 2) ? my_rank - 1 : my_rank + 1;  
+            if (is_odd_phase) partner = (is_odd_rank) ? my_rank + 1 : my_rank - 1;
+            else partner = (is_odd_rank) ? my_rank - 1 : my_rank + 1;  
             if ((partner < 0) || (partner >= numtasks)) partner = MPI_PROC_NULL;
 
-            /* MPI and subarrays merge */
-            if (partner != MPI_PROC_NULL) {
-                const int recv_count = (partner < remainder) ? base_chunk_size + 1 : base_chunk_size;
-                const int is_left = (my_rank < partner) ? 1 : 0;
-                
-                // Use MPI_Sendrecv for its deadlock-free guarantee and simplicity.
-                MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, phase,
-                             recv_data, recv_count, MPI_FLOAT, partner, phase,
+            const int partner_exist = (partner != MPI_PROC_NULL) ? 1 : 0;
+            const int is_left = (my_rank < partner) ? 1 : 0;
+            const int recv_count = (partner < remainder) ? base_chunk_size + 1 : base_chunk_size;
+            
+            // DEMO POINT: Conditional Merge-Split
+            // This is the core of the final optimization. Instead of blindly merging,
+            // we first perform a cheap check by exchanging only the boundary elements.
+            if (partner_exist && is_left) { // I am the left process of a pair.
+
+                // Exchange my last element with my partner's first element.
+                MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, phase,
+                             &partner_boundary, 1, MPI_FLOAT, partner, phase,
                              active_comm, MPI_STATUS_IGNORE);
-                
-                // DEMO POINT: Calling our highly optimized Zero-Copy merge-split function.
-                merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
+
+                // Only perform the expensive full exchange and merge if my data
+                // might flow into my partner's partition.
+                if (my_last > partner_boundary) {
+
+                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, phase,
+                                 recv_data, recv_count, MPI_FLOAT, partner, phase,
+                                 active_comm, MPI_STATUS_IGNORE);
+
+                    merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
+                }
+
+            } else if (partner_exist) { // I am the right process of a pair.
+
+                // Exchange my first element with my partner's last element.
+                MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, phase,
+                             &partner_boundary, 1, MPI_FLOAT, partner, phase,
+                             active_comm, MPI_STATUS_IGNORE);
+
+                // Only perform the expensive full exchange and merge if my partner's data
+                // might flow into my partition.
+                if (my_first < partner_boundary) {
+
+                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, phase,
+                                 recv_data, recv_count, MPI_FLOAT, partner, phase,
+                                 active_comm, MPI_STATUS_IGNORE);
+
+                    merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
+                }
             }
 
             /* Early Exit */
             int done = 0;
             // DEMO POINT: Optimized Early Exit Strategy
-            if (phase >= numtasks / 2 && !(phase % 2)) {
-                done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
-            }
+            if (phase >= numtasks / 2 && !(phase % 2)) done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
             if (done) break;
         }
     }
@@ -199,7 +234,6 @@ void local_sort(float local_data[], const int my_count) {
         }
     }
     else if (my_count < 1025) std::sort(local_data, local_data + my_count);
-    else if (my_count < 10000) boost::sort::spreadsort::spreadsort(local_data, local_data + my_count);
     else boost::sort::spreadsort::float_sort(local_data, local_data + my_count);
 }
 
@@ -207,11 +241,6 @@ void local_sort(float local_data[], const int my_count) {
 void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left) {
 
     if (my_count < 1) return;
-    
-    // DEMO POINT: CPU Cache Prefetching
-    if (my_count > 0) __builtin_prefetch(temp, 1, 0);
-    if (my_count > 0) __builtin_prefetch(local_data, 0, 0);
-    if (recv_count > 0) __builtin_prefetch(recv_data, 0, 0);
 
     if (is_left) {
         int i = 0, j = 0, k = 0;
@@ -252,7 +281,6 @@ const int sorted_check(float *local_data, const int my_count, const int my_rank,
                  comm, MPI_STATUS_IGNORE);
 
     if (my_count > 0 && my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
-    
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
     
     return global_sorted;
