@@ -90,7 +90,6 @@ int main(int argc, char *argv[]) {
     }
 
     /* Main loop */
-    MPI_Barrier(MPI_COMM_WORLD);
     if (is_active) {
 
         for (int phase = 0; phase < max_phases; phase++) {
@@ -193,7 +192,7 @@ const int sorted_check(float *local_data, const int my_count, const int my_rank,
                  comm, MPI_STATUS_IGNORE);
 
     // From right process's perspective
-    if (my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
+    if (my_count && my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
     
     return global_sorted;
