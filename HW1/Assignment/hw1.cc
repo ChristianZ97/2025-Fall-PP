@@ -51,6 +51,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <float.h>
 #include <boost/sort/spreadsort/spreadsort.hpp>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -63,11 +64,13 @@ void merge_sort_split(float *&local_data, const int my_count, float *recv_data, 
 /* Main Function */
 int main(int argc, char *argv[]) {
 
+    if (argc != 4) return -1;
+
 
     /* MPI Init and Grouping */
     MPI_Group orig_group, active_group;
     MPI_Comm active_comm;
-    const int N = atoi(argv[1]);
+    const int N = atoi(argv[1]); if (N < 1) return -1;
     int numtasks, my_rank;
 
     MPI_Init(&argc, &argv);
@@ -99,6 +102,9 @@ int main(int argc, char *argv[]) {
     const int is_odd_rank = (my_rank % 2) ? 1 : 0;
     float partner_boundary;
 
+    const size_t max_needed = (size_t)(base_chunk_size + 1) * 2;
+    if (max_needed > SIZE_MAX / sizeof(float)) MPI_Abort(MPI_COMM_WORLD, -1);
+
     MPI_File input_file, output_file;
     const char *const input_filename = argv[2];
     const char *const output_filename = argv[3];
@@ -118,9 +124,9 @@ int main(int argc, char *argv[]) {
         recv_data = (float *)aligned_alloc(32, one_chunk);
 
         // DEMO POINT: Pointer Swapping Strategy
-        if (!temp) temp = (float *)malloc(two_chunk * sizeof(float));
-        if (!local_data) local_data = (float *)malloc(two_chunk * sizeof(float));
-        if (!recv_data) recv_data = (float *)malloc(one_chunk * sizeof(float));
+        if (!temp) temp = (float *)malloc(two_chunk);
+        if (!local_data) local_data = (float *)malloc(two_chunk);
+        if (!recv_data) recv_data = (float *)malloc(one_chunk);
         
         // Use robust, synchronous I/O for simplicity and correctness.
         MPI_File_open(active_comm, input_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &input_file);
@@ -136,6 +142,8 @@ int main(int argc, char *argv[]) {
 
         for (int phase = 0; phase < max_phases; phase++) {
 
+            const int mpi_boundary_tag = 2 * phase;
+            const int mpi_data_tag = 2 * phase + 1;
             const int is_odd_phase = (phase % 2) ? 1 : 0;
             const float my_first = local_data[0];
             const float my_last = local_data[my_count - 1];
@@ -156,16 +164,16 @@ int main(int argc, char *argv[]) {
             if (partner_exist && is_left) { // I am the left process of a pair.
 
                 // Exchange my last element with my partner's first element.
-                MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, phase,
-                             &partner_boundary, 1, MPI_FLOAT, partner, phase,
+                MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag,
+                             &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                              active_comm, MPI_STATUS_IGNORE);
 
                 // Only perform the expensive full exchange and merge if my data
                 // might flow into my partner's partition.
                 if (my_last > partner_boundary) {
 
-                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, phase,
-                                 recv_data, recv_count, MPI_FLOAT, partner, phase,
+                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
+                                 recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
                                  active_comm, MPI_STATUS_IGNORE);
 
                     merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
@@ -174,16 +182,16 @@ int main(int argc, char *argv[]) {
             } else if (partner_exist) { // I am the right process of a pair.
 
                 // Exchange my first element with my partner's last element.
-                MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, phase,
-                             &partner_boundary, 1, MPI_FLOAT, partner, phase,
+                MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag,
+                             &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                              active_comm, MPI_STATUS_IGNORE);
 
                 // Only perform the expensive full exchange and merge if my partner's data
                 // might flow into my partition.
                 if (my_first < partner_boundary) {
 
-                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, phase,
-                                 recv_data, recv_count, MPI_FLOAT, partner, phase,
+                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
+                                 recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
                                  active_comm, MPI_STATUS_IGNORE);
 
                     merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
@@ -271,7 +279,7 @@ const int sorted_check(float *local_data, const int my_count, const int my_rank,
     const int mpi_tag = 0;
     const int prev_rank = (my_rank > 0) ? my_rank - 1 : MPI_PROC_NULL;
     const int next_rank = (my_rank < numtasks - 1) ? my_rank + 1 : MPI_PROC_NULL;
-    const float my_last_element = (my_count > 0) ? local_data[my_count - 1] : -1.0f;
+    const float my_last_element = (my_count > 0) ? local_data[my_count - 1] : -FLT_MAX;
     int boundary_sorted = 1;
     int global_sorted;
     float prev_last_element;
