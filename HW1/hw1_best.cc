@@ -46,26 +46,23 @@
  */
 
 /* Headers */
-#include <mpi.h>
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <algorithm>
 #include <float.h>
+#include <mpi.h>
+#include <algorithm>
 #include <boost/sort/spreadsort/spreadsort.hpp>
-
-#define min(a, b) ((a) < (b) ? (a) : (b))
 
 /* Function Prototypes */
 void local_sort(float local_data[], const int my_count);
-const int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, MPI_Comm comm);
 void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left);
+const int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, MPI_Comm comm);
 
 /* Main Function */
 int main(int argc, char *argv[]) {
 
     if (argc != 4) return -1;
-
 
     /* MPI Init and Grouping */
     MPI_Group orig_group, active_group;
@@ -78,7 +75,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_group(MPI_COMM_WORLD, &orig_group);
 
-    const int active_numtasks = min(numtasks, N);
+    const int active_numtasks = std::min(numtasks, N);
     int *active_ranks = (int *)malloc(active_numtasks * sizeof(int));
     for (int i = 0; i < active_numtasks; i++) active_ranks[i] = i;
 
@@ -89,18 +86,14 @@ int main(int argc, char *argv[]) {
         MPI_Comm_size(active_comm, &numtasks);
         MPI_Comm_rank(active_comm, &my_rank);
     }
-
     MPI_Barrier(MPI_COMM_WORLD);
     
     /* Data distribution and I/O */
     const int base_chunk_size = N / numtasks;
     const int remainder = N % numtasks;
     const int my_count = (my_rank < remainder) ? base_chunk_size + 1 : base_chunk_size;
-    const int my_start_index = my_rank * base_chunk_size + min(my_rank, remainder);
+    const int my_start_index = my_rank * base_chunk_size + std::min(my_rank, remainder);
     const int is_active = (active_comm != MPI_COMM_NULL) && (my_count > 0);
-    const int max_phases = numtasks + (numtasks / 2);
-    const int is_odd_rank = (my_rank % 2) ? 1 : 0;
-    float partner_boundary;
 
     const size_t max_needed = (size_t)(base_chunk_size + 1) * 2;
     if (max_needed > SIZE_MAX / sizeof(float)) MPI_Abort(MPI_COMM_WORLD, -1);
@@ -115,18 +108,17 @@ int main(int argc, char *argv[]) {
     if (is_active) {
         
         // DEMO POINT: Smart Memory Allocation for Zero-Copy
-        const size_t two_chunk = (((base_chunk_size + 1) * 2 * sizeof(float) + 31) / 32) * 32;
-        const size_t one_chunk = (((base_chunk_size + 1) * sizeof(float) + 31) / 32) * 32;
+        const size_t chunk = (((base_chunk_size + 1) * sizeof(float) + 31) / 32) * 32;
 
         // DEMO POINT: Aligned Memory
-        temp = (float *)aligned_alloc(32, two_chunk);
-        local_data = (float *)aligned_alloc(32, two_chunk);
-        recv_data = (float *)aligned_alloc(32, one_chunk);
+        temp = (float *)aligned_alloc(32, chunk);
+        local_data = (float *)aligned_alloc(32, chunk);
+        recv_data = (float *)aligned_alloc(32, chunk);
 
         // DEMO POINT: Pointer Swapping Strategy
-        if (!temp) temp = (float *)malloc(two_chunk);
-        if (!local_data) local_data = (float *)malloc(two_chunk);
-        if (!recv_data) recv_data = (float *)malloc(one_chunk);
+        if (!temp) temp = (float *)malloc(chunk);
+        if (!local_data) local_data = (float *)malloc(chunk);
+        if (!recv_data) recv_data = (float *)malloc(chunk);
         
         // Use robust, synchronous I/O for simplicity and correctness.
         MPI_File_open(active_comm, input_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &input_file);
@@ -140,66 +132,69 @@ int main(int argc, char *argv[]) {
     /* Main loop */
     if (is_active) {
 
+        const int max_phases = numtasks + (numtasks / 2);
+        const int is_odd_rank = my_rank % 2;
+        float partner_boundary = -FLT_MAX;
+
         for (int phase = 0; phase < max_phases; phase++) {
 
             const int mpi_boundary_tag = 2 * phase;
             const int mpi_data_tag = 2 * phase + 1;
-            const int is_odd_phase = (phase % 2) ? 1 : 0;
             const float my_first = local_data[0];
             const float my_last = local_data[my_count - 1];
+            int done = 0;
 
             /* Partner ID */
             int partner = -1;
-            if (is_odd_phase) partner = (is_odd_rank) ? my_rank + 1 : my_rank - 1;
-            else partner = (is_odd_rank) ? my_rank - 1 : my_rank + 1;  
+            if (phase % 2) partner = (is_odd_rank) ? my_rank + 1 : my_rank - 1;
+            else partner = (is_odd_rank) ? my_rank - 1 : my_rank + 1;
             if ((partner < 0) || (partner >= numtasks)) partner = MPI_PROC_NULL;
-
-            const int partner_exist = (partner != MPI_PROC_NULL) ? 1 : 0;
-            const int is_left = (my_rank < partner) ? 1 : 0;
             const int recv_count = (partner < remainder) ? base_chunk_size + 1 : base_chunk_size;
             
             // DEMO POINT: Conditional Merge-Split
             // This is the core of the final optimization. Instead of blindly merging,
             // we first perform a cheap check by exchanging only the boundary elements.
-            if (partner_exist && is_left) { // I am the left process of a pair.
+            if (partner != MPI_PROC_NULL) {
 
-                // Exchange my last element with my partner's first element.
-                MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                             &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                             active_comm, MPI_STATUS_IGNORE);
+                if (my_rank < partner) { // I am the left process of a pair.
 
-                // Only perform the expensive full exchange and merge if my data
-                // might flow into my partner's partition.
-                if (my_last > partner_boundary) {
-
-                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
-                                 recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
+                    // Exchange my last element with my partner's first element.
+                    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag,
+                                 &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  active_comm, MPI_STATUS_IGNORE);
 
-                    merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
-                }
+                    // Only perform the expensive full exchange and merge if my data
+                    // might flow into my partner's partition.
+                    if (my_last > partner_boundary) {
 
-            } else if (partner_exist) { // I am the right process of a pair.
+                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
+                                     recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
+                                     active_comm, MPI_STATUS_IGNORE);
 
-                // Exchange my first element with my partner's last element.
-                MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                             &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                             active_comm, MPI_STATUS_IGNORE);
+                        merge_sort_split(local_data, my_count, recv_data, recv_count, temp, 1);
+                    }
 
-                // Only perform the expensive full exchange and merge if my partner's data
-                // might flow into my partition.
-                if (my_first < partner_boundary) {
+                } else { // I am the right process of a pair.
 
-                    MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
-                                 recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
+                    // Exchange my first element with my partner's last element.
+                    MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag,
+                                 &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  active_comm, MPI_STATUS_IGNORE);
 
-                    merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
+                    // Only perform the expensive full exchange and merge if my partner's data
+                    // might flow into my partition.
+                    if (my_first < partner_boundary) {
+
+                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
+                                     recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
+                                     active_comm, MPI_STATUS_IGNORE);
+
+                        merge_sort_split(local_data, my_count, recv_data, recv_count, temp, 0);
+                    }
                 }
             }
 
             /* Early Exit */
-            int done = 0;
             // DEMO POINT: Optimized Early Exit Strategy
             if (phase >= numtasks / 2 && !(phase % 2)) done = sorted_check(local_data, my_count, my_rank, numtasks, active_comm);
             if (done) break;
@@ -208,7 +203,7 @@ int main(int argc, char *argv[]) {
 
     /* MPI I/O and Finalize */
     if (is_active) {
-        MPI_Barrier(active_comm);
+
         MPI_File_open(active_comm, output_filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &output_file);
         MPI_File_write_at(output_file, my_start_index * sizeof(float), local_data, my_count, MPI_FLOAT, MPI_STATUS_IGNORE);
         MPI_File_close(&output_file);
@@ -218,10 +213,10 @@ int main(int argc, char *argv[]) {
         free(temp);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
     free(active_ranks);
     MPI_Group_free(&active_group);
     MPI_Group_free(&orig_group);
+    MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
     return 0;
 }
@@ -279,16 +274,16 @@ const int sorted_check(float *local_data, const int my_count, const int my_rank,
     const int mpi_tag = 0;
     const int prev_rank = (my_rank > 0) ? my_rank - 1 : MPI_PROC_NULL;
     const int next_rank = (my_rank < numtasks - 1) ? my_rank + 1 : MPI_PROC_NULL;
-    const float my_last_element = (my_count > 0) ? local_data[my_count - 1] : -FLT_MAX;
+    const float my_last = (my_count > 0) ? local_data[my_count - 1] : -FLT_MAX;
     int boundary_sorted = 1;
     int global_sorted;
-    float prev_last_element;
+    float prev_last;
 
-    MPI_Sendrecv(&my_last_element, 1, MPI_FLOAT, next_rank, mpi_tag,
-                 &prev_last_element, 1, MPI_FLOAT, prev_rank, mpi_tag,
+    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, next_rank, mpi_tag,
+                 &prev_last, 1, MPI_FLOAT, prev_rank, mpi_tag,
                  comm, MPI_STATUS_IGNORE);
 
-    if (my_count > 0 && my_rank > 0 && prev_last_element > local_data[0]) boundary_sorted = 0;
+    if (my_count > 0 && my_rank > 0 && prev_last > local_data[0]) boundary_sorted = 0;
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
     
     return global_sorted;
