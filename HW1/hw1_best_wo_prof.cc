@@ -68,12 +68,7 @@
  *    checks, including `strtol` for safe input parsing, integer overflow checks
  *    before memory allocation, a `malloc` fallback for `aligned_alloc`, and unique
  *    MPI tags per phase to guarantee correctness.
- * 
- * ----------------------------------------------------------------------------
- * NOTE: Profiling code is added within #ifdef PROFILING blocks.
- * Compile with -DPROFILING to enable timing measurements.
  */
-
 
 /* Headers */
 #include <stdio.h>
@@ -84,60 +79,6 @@
 #include <boost/sort/spreadsort/spreadsort.hpp>
 #include <errno.h> // For strtol error checking
 
-
-#ifdef PROFILING
-#include <nvtx3/nvToolsExt.h>
-#include <string.h>
-
-// ============================================================================
-// NVTX Color Definitions for Performance Profiling
-// ============================================================================
-#define COLOR_IO           0xFF5C9FFF  // Azure Blue
-#define COLOR_BOUNDARY     0xFFFF6B81  // Rose Red (Boundary Check)
-#define COLOR_DATA_EXC     0xFFFFA500  // Orange (Data Exchange)
-#define COLOR_LOCAL_SORT   0xFF5FD068  // Spring Green (Local Sort)
-#define COLOR_MERGE_SPLIT  0xFF32CD32  // Lime Green (Merge-Split)
-#define COLOR_SETUP        0xFFFFBE3D  // Sunflower Yellow
-#define COLOR_DEFAULT      0xFFCBD5E0  // Soft Gray
-
-// ============================================================================
-// Smart NVTX Macro: Auto-selects color based on range name pattern
-// ============================================================================
-#define NVTX_PUSH(name) \
-    do { \
-        uint32_t color = COLOR_DEFAULT; \
-        if (strstr(name, "IO_") != NULL) { \
-            color = COLOR_IO; \
-        } else if (strcmp(name, "Boundary_Check") == 0) { \
-            color = COLOR_BOUNDARY; \
-        } else if (strcmp(name, "Data_Exchange") == 0) { \
-            color = COLOR_DATA_EXC; \
-        } else if (strcmp(name, "Sorted_Check") == 0) { \
-            color = COLOR_BOUNDARY; \
-        } else if (strcmp(name, "Local_Sort") == 0) { \
-            color = COLOR_LOCAL_SORT; \
-        } else if (strcmp(name, "Merge_Split") == 0) { \
-            color = COLOR_MERGE_SPLIT; \
-        } else if (strcmp(name, "MPI_Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) { \
-            color = COLOR_SETUP; \
-        } else { \
-            color = COLOR_DEFAULT; \
-        } \
-        nvtxEventAttributes_t eventAttrib = {0}; \
-        eventAttrib.version = NVTX_VERSION; \
-        eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
-        eventAttrib.colorType = NVTX_COLOR_ARGB; \
-        eventAttrib.color = color; \
-        eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
-        eventAttrib.message.ascii = name; \
-        nvtxRangePushEx(&eventAttrib); \
-    } while(0)
-
-
-#define NVTX_POP() nvtxRangePop()
-#endif
-
-
 /* Function Prototypes */
 void local_sort(float local_data[], const int my_count);
 void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left);
@@ -145,18 +86,7 @@ int sorted_check(float *local_data, const int my_count, const int my_rank, const
 
 /* Main Function */
 int main(int argc, char *argv[]) {
-
-    // ========================================================================
-    // Block 1: MPI Initialization and Environment Setup
-    // ========================================================================
     MPI_Init(&argc, &argv);
-
-    #ifdef PROFILING
-    double total_start_time, temp_start, io_time = 0.0, comm_time = 0.0;
-    MPI_Barrier(MPI_COMM_WORLD); // Synchronize before starting the main timer
-    total_start_time = MPI_Wtime();
-    NVTX_PUSH("MPI_Setup");
-    #endif
 
     // Use strtol for safer conversion from command-line argument.
     char *endptr;
@@ -186,13 +116,7 @@ int main(int argc, char *argv[]) {
         MPI_Comm_rank(active_comm, &my_rank);
     }
     MPI_Barrier(MPI_COMM_WORLD);
-    #ifdef PROFILING
-    NVTX_POP(); // end MPI_Setup
-    #endif
-
-    // ========================================================================
-    // Block 2: Data Distribution and Memory Allocation
-    // ========================================================================
+    
     /* Data distribution and I/O preparation */
     const int valid_tasks = (numtasks > 0) ? 1 : 0;
     const int valid_rank = (my_rank != -1) ? 1 : 0;
@@ -216,9 +140,6 @@ int main(int argc, char *argv[]) {
     float *local_data = NULL;
     float *recv_data = NULL;
 
-    #ifdef PROFILING
-    NVTX_PUSH("Mem_Alloc");
-    #endif
     if (is_active) {
         // DEMO POINT 4: Aligned Memory Allocation.
         temp = (float *)aligned_alloc(32, chunk_size_bytes);
@@ -237,46 +158,15 @@ int main(int argc, char *argv[]) {
             
             if (!temp || !local_data || !recv_data) MPI_Abort(active_comm, 1);
         }
-        #ifdef PROFILING
-        NVTX_POP(); // end Mem_Alloc
-        #endif
-
-        // ========================================================================
-        // Block 3: Initial I/O (Read)
-        // ========================================================================
-
-        #ifdef PROFILING
-        temp_start = MPI_Wtime();
-        NVTX_PUSH("IO_Read");
-        #endif
+        
         // Initial data read and sort.
         MPI_File_open(active_comm, input_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &input_file);
         MPI_File_read_at(input_file, my_start_index * sizeof(float), local_data, my_count, MPI_FLOAT, MPI_STATUS_IGNORE);
         MPI_File_close(&input_file);
-        #ifdef PROFILING
-        io_time += MPI_Wtime() - temp_start; // end io_time
-        NVTX_POP(); // end IO_Read
-        #endif
-
-        // ========================================================================
-        // Block 4: Initial Computation (Local Sort)
-        // ========================================================================
+        
         // DEMO POINT 3: Adaptive Local Sort is called here.
-        #ifdef PROFILING
-        NVTX_PUSH("Local_Sort");
-        #endif
         local_sort(local_data, my_count);
-        #ifdef PROFILING
-        NVTX_POP(); // end Local_Sort
-        #endif
 
-
-        // ========================================================================
-        // Block 5: Main Communication & Computation Loop
-        // ========================================================================
-        #ifdef PROFILING
-        NVTX_PUSH("Main_Loop");
-        #endif
         /* Main sorting loop */
         const int max_phases = numtasks + (numtasks / 2);
         const int is_odd_rank = (my_rank % 2) ? 1 : 0;
@@ -292,7 +182,6 @@ int main(int argc, char *argv[]) {
             const int valid_comm = (partner != MPI_PROC_NULL) ? 1 : 0;
             
             if (valid_comm) {
-
                 const int recv_count = (partner < remainder) ? base_chunk_size + 1 : base_chunk_size;
                 // DEMO POINT 6: Unique MPI tags ensure message correctness.
                 const int mpi_boundary_tag = 2 * phase;
@@ -302,156 +191,55 @@ int main(int argc, char *argv[]) {
                 // DEMO POINT 1: Conditional Merge-Split logic begins here.
                 if (is_left) {
                     const float my_last = local_data[my_count - 1];
-
-                    #ifdef PROFILING
-                    temp_start = MPI_Wtime();
-                    NVTX_PUSH("Boundary_Check");
-                    #endif
                     MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  active_comm, MPI_STATUS_IGNORE);
-                    #ifdef PROFILING
-                    comm_time += MPI_Wtime() - temp_start; // end comm_time
-                    NVTX_POP(); // end Boundary_Check
-                    #endif
-
+                    
                     if (my_last > partner_boundary) {
-                        
-                        #ifdef PROFILING
-                        temp_start = MPI_Wtime();
-                        NVTX_PUSH("Data_Exchange");
-                        #endif
                         MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
                                      recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
                                      active_comm, MPI_STATUS_IGNORE);
-                        #ifdef PROFILING
-                        comm_time += MPI_Wtime() - temp_start; // end comm_time
-                        NVTX_POP(); // end Data_Exchange
-                        #endif
-                        
-                        #ifdef PROFILING
-                        NVTX_PUSH("Merge_Split");
-                        #endif
                         // DEMO POINT 2: Zero-Copy Merge-Split is called here.
                         merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
-                        #ifdef PROFILING
-                        NVTX_POP(); // end Merge_Split
-                        #endif
-
                     }
                 
                 } else { // I am the right process.
                     const float my_first = local_data[0];
-
-                    #ifdef PROFILING
-                    temp_start = MPI_Wtime();
-                    NVTX_PUSH("Boundary_Check");
-                    #endif
                     MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
                                  active_comm, MPI_STATUS_IGNORE);
-                    #ifdef PROFILING
-                    comm_time += MPI_Wtime() - temp_start; // end comm_time
-                    NVTX_POP(); // end Boundary_Check
-                    #endif
-
+                    
                     if (my_first < partner_boundary) {
-
-                        #ifdef PROFILING
-                        temp_start = MPI_Wtime();
-                        NVTX_PUSH("Data_Exchange");
-                        #endif
                         MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
                                      recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
                                      active_comm, MPI_STATUS_IGNORE);
-                        #ifdef PROFILING
-                        comm_time += MPI_Wtime() - temp_start; // end comm_time
-                        NVTX_POP(); // end Data_Exchange
-                        #endif
-                        
-                        #ifdef PROFILING
-                        NVTX_PUSH("Merge_Split");
-                        #endif
                         // DEMO POINT 2: Zero-Copy Merge-Split is called here.
                         merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
-                        #ifdef PROFILING
-                        NVTX_POP(); // end Merge_Split
-                        #endif
                     }
                 }
-            } // end valid_comm
-
-            // DEMO POINT 5: Efficient Early Exit check.
-            if (phase >= numtasks / 2 && !phase_odd) {
-                
-                #ifdef PROFILING
-                temp_start = MPI_Wtime();
-                NVTX_PUSH("Sorted_Check");
-                #endif
-                const int done = sorted_check(local_data, my_count, my_rank, numtasks, phase, active_comm);
-                #ifdef PROFILING
-                comm_time += MPI_Wtime() - temp_start; // end comm_time
-                NVTX_POP(); // end Sorted_Check
-                #endif
-
-                if (done) break;
             }
 
-    } // end for loop
-    #ifdef PROFILING
-    NVTX_POP();
-    #endif
+            // DEMO POINT 5: Efficient Early Exit check.
+            if (phase >= numtasks / 2 && !phase_odd)
+                if (sorted_check(local_data, my_count, my_rank, numtasks, phase, active_comm)) break;
+        }
 
-        // ========================================================================
-        // Block 6: Final I/O (Write)
-        // ========================================================================
-        #ifdef PROFILING
-        temp_start = MPI_Wtime();
-        NVTX_PUSH("IO_Write");
-        #endif
         // Final write to output file.
         MPI_File_open(active_comm, output_filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &output_file);
         MPI_File_write_at(output_file, my_start_index * sizeof(float), local_data, my_count, MPI_FLOAT, MPI_STATUS_IGNORE);
         MPI_File_close(&output_file);
-        #ifdef PROFILING
-        io_time += MPI_Wtime() - temp_start; // end io_time
-        NVTX_POP(); // end IO_Write
-        #endif
 
-        free(local_data); free(recv_data); free(temp);
-    } // end is_active
-
-
-    // ========================================================================
-    // Block 7: Finalization and Cleanup
-    // ========================================================================
-    #ifdef PROFILING
-    MPI_Barrier(MPI_COMM_WORLD); // Synchronize before stopping the main timer
-    double total_time = MPI_Wtime() - total_start_time;
-    double cpu_time = total_time - io_time - comm_time;
-
-    // We can gather all timing data to rank 0 for printing
-    if (my_rank == 0) {
-        printf("N=%d, Procs=%d, Total Time: %f s\n", N, numtasks, total_time);
-        printf("  IO Time:   %f s (%f %%)\n", io_time, (io_time / total_time) * 100);
-        printf("  Comm Time: %f s (%f %%)\n", comm_time, (comm_time / total_time) * 100);
-        printf("  CPU Time:  %f s (%f %%)\n", cpu_time, (cpu_time / total_time) * 100);
+        free(local_data);
+        free(recv_data);
+        free(temp);
     }
-    #endif
 
-    #ifdef PROFILING
-    NVTX_PUSH("MPI_Finalize");
-    #endif
     /* Cleanup MPI resources */
     free(active_ranks);
     MPI_Group_free(&orig_group);
     if (active_comm != MPI_COMM_NULL) MPI_Group_free(&active_group);
     if (active_comm != MPI_COMM_NULL) MPI_Comm_free(&active_comm);
     MPI_Barrier(MPI_COMM_WORLD);
-    #ifdef PROFILING
-    NVTX_POP(); // end MPI_Finalize
-    #endif
-
     MPI_Finalize();
     return 0;
 }
@@ -544,5 +332,6 @@ int sorted_check(float *local_data, const int my_count, const int my_rank, const
     // Perform a global AND operation. If any process found an unsorted boundary,
     // the global result will be 0.
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
+    
     return global_sorted;
 }
