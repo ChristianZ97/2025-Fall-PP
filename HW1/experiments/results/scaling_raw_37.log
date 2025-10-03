@@ -1,0 +1,396 @@
+Starting experiments for testcase 37 (N=536869888)
+--- Running with 1 cores on 4 node(s) ---
+Executing: srun -N4 -n1 ./hw1_prof 536869888 ./testcases/37.in my_37_1cores.out
+srun: warning: can't run 1 processes on 4 nodes, setting nnodes to 1
+N=536869888, Procs=1, Avg Total Time: 16.414544 s
+  Avg IO Time:   3.695644 s (22.51%)
+  Avg Comm Time: 0.000036 s (0.00%)
+  Avg CPU Time:  12.718864 s (77.49%)
+  Max Total Time: 16.414544 s, Min Total Time: 16.414544 s
+srun Wall Time: 17.19 seconds
+--- Running with 2 cores on 4 node(s) ---
+Executing: srun -N4 -n2 ./hw1_prof 536869888 ./testcases/37.in my_37_2cores.out
+srun: warning: can't run 2 processes on 4 nodes, setting nnodes to 2
+N=536869888, Procs=2, Avg Total Time: 9.136233 s
+  Avg IO Time:   1.958064 s (21.43%)
+  Avg Comm Time: 0.773958 s (8.47%)
+  Avg CPU Time:  6.404211 s (70.10%)
+  Max Total Time: 9.136236 s, Min Total Time: 9.136230 s
+srun Wall Time: 9.72 seconds
+--- Running with 3 cores on 4 node(s) ---
+Executing: srun -N4 -n3 ./hw1_prof 536869888 ./testcases/37.in my_37_3cores.out
+srun: warning: can't run 3 processes on 4 nodes, setting nnodes to 3
+N=536869888, Procs=3, Avg Total Time: 8.385716 s
+  Avg IO Time:   2.578425 s (30.75%)
+  Avg Comm Time: 1.360175 s (16.22%)
+  Avg CPU Time:  4.447115 s (53.03%)
+  Max Total Time: 8.386044 s, Min Total Time: 8.385550 s
+srun Wall Time: 9.24 seconds
+--- Running with 4 cores on 4 node(s) ---
+Executing: srun -N4 -n4 ./hw1_prof 536869888 ./testcases/37.in my_37_4cores.out
+N=536869888, Procs=4, Avg Total Time: 6.089559 s
+  Avg IO Time:   1.665049 s (27.34%)
+  Avg Comm Time: 0.920137 s (15.11%)
+  Avg CPU Time:  3.504373 s (57.55%)
+  Max Total Time: 6.089681 s, Min Total Time: 6.089437 s
+srun Wall Time: 6.80 seconds
+--- Running with 5 cores on 4 node(s) ---
+Executing: srun -N4 -n5 ./hw1_prof 536869888 ./testcases/37.in my_37_5cores.out
+N=536869888, Procs=5, Avg Total Time: 6.309226 s
+  Avg IO Time:   2.576671 s (40.84%)
+  Avg Comm Time: 0.979786 s (15.53%)
+  Avg CPU Time:  2.752769 s (43.63%)
+  Max Total Time: 6.309231 s, Min Total Time: 6.309220 s
+srun Wall Time: 7.25 seconds
+--- Running with 6 cores on 4 node(s) ---
+Executing: srun -N4 -n6 ./hw1_prof 536869888 ./testcases/37.in my_37_6cores.out
+N=536869888, Procs=6, Avg Total Time: 5.280796 s
+  Avg IO Time:   2.032419 s (38.49%)
+  Avg Comm Time: 1.088017 s (20.60%)
+  Avg CPU Time:  2.160359 s (40.91%)
+  Max Total Time: 5.280803 s, Min Total Time: 5.280790 s
+srun Wall Time: 6.07 seconds
+--- Running with 7 cores on 4 node(s) ---
+Executing: srun -N4 -n7 ./hw1_prof 536869888 ./testcases/37.in my_37_7cores.out
+N=536869888, Procs=7, Avg Total Time: 5.542674 s
+  Avg IO Time:   2.454484 s (44.28%)
+  Avg Comm Time: 1.124005 s (20.28%)
+  Avg CPU Time:  1.964185 s (35.44%)
+  Max Total Time: 5.542676 s, Min Total Time: 5.542670 s
+srun Wall Time: 6.44 seconds
+--- Running with 8 cores on 4 node(s) ---
+Executing: srun -N4 -n8 ./hw1_prof 536869888 ./testcases/37.in my_37_8cores.out
+N=536869888, Procs=8, Avg Total Time: 5.411171 s
+  Avg IO Time:   2.390412 s (44.18%)
+  Avg Comm Time: 1.388132 s (25.65%)
+  Avg CPU Time:  1.632626 s (30.17%)
+  Max Total Time: 5.411508 s, Min Total Time: 5.411097 s
+srun Wall Time: 6.20 seconds
+--- Running with 9 cores on 4 node(s) ---
+Executing: srun -N4 -n9 ./hw1_prof 536869888 ./testcases/37.in my_37_9cores.out
+N=536869888, Procs=9, Avg Total Time: 5.338009 s
+  Avg IO Time:   2.549571 s (47.76%)
+  Avg Comm Time: 1.204115 s (22.56%)
+  Avg CPU Time:  1.584323 s (29.68%)
+  Max Total Time: 5.338018 s, Min Total Time: 5.337986 s
+srun Wall Time: 6.37 seconds
+--- Running with 10 cores on 4 node(s) ---
+Executing: srun -N4 -n10 ./hw1_prof 536869888 ./testcases/37.in my_37_10cores.out
+srun: job 209548 queued and waiting for resources
+srun: job 209548 has been allocated resources
+N=536869888, Procs=10, Avg Total Time: 5.165939 s
+  Avg IO Time:   2.679029 s (51.86%)
+  Avg Comm Time: 1.156823 s (22.39%)
+  Avg CPU Time:  1.330087 s (25.75%)
+  Max Total Time: 5.165950 s, Min Total Time: 5.165924 s
+srun Wall Time: 6.10 seconds
+--- Running with 11 cores on 4 node(s) ---
+Executing: srun -N4 -n11 ./hw1_prof 536869888 ./testcases/37.in my_37_11cores.out
+N=536869888, Procs=11, Avg Total Time: 4.802419 s
+  Avg IO Time:   2.402042 s (50.02%)
+  Avg Comm Time: 1.139081 s (23.72%)
+  Avg CPU Time:  1.261296 s (26.26%)
+  Max Total Time: 4.802426 s, Min Total Time: 4.802411 s
+srun Wall Time: 5.71 seconds
+--- Running with 12 cores on 4 node(s) ---
+Executing: srun -N4 -n12 ./hw1_prof 536869888 ./testcases/37.in my_37_12cores.out
+N=536869888, Procs=12, Avg Total Time: 4.640575 s
+  Avg IO Time:   2.406797 s (51.86%)
+  Avg Comm Time: 1.070001 s (23.06%)
+  Avg CPU Time:  1.163777 s (25.08%)
+  Max Total Time: 4.640583 s, Min Total Time: 4.640563 s
+srun Wall Time: 5.60 seconds
+--- Running with 13 cores on 4 node(s) ---
+Executing: srun -N4 -n13 ./hw1_prof 536869888 ./testcases/37.in my_37_13cores.out
+N=536869888, Procs=13, Avg Total Time: 4.538656 s
+  Avg IO Time:   2.274778 s (50.12%)
+  Avg Comm Time: 1.227130 s (27.04%)
+  Avg CPU Time:  1.036748 s (22.84%)
+  Max Total Time: 4.538663 s, Min Total Time: 4.538639 s
+srun Wall Time: 6.50 seconds
+--- Running with 14 cores on 4 node(s) ---
+Executing: srun -N4 -n14 ./hw1_prof 536869888 ./testcases/37.in my_37_14cores.out
+N=536869888, Procs=14, Avg Total Time: 4.739301 s
+  Avg IO Time:   2.382661 s (50.27%)
+  Avg Comm Time: 1.314981 s (27.75%)
+  Avg CPU Time:  1.041659 s (21.98%)
+  Max Total Time: 4.739308 s, Min Total Time: 4.739289 s
+srun Wall Time: 5.79 seconds
+--- Running with 15 cores on 4 node(s) ---
+Executing: srun -N4 -n15 ./hw1_prof 536869888 ./testcases/37.in my_37_15cores.out
+N=536869888, Procs=15, Avg Total Time: 4.518783 s
+  Avg IO Time:   2.239767 s (49.57%)
+  Avg Comm Time: 1.395591 s (30.88%)
+  Avg CPU Time:  0.883426 s (19.55%)
+  Max Total Time: 4.518799 s, Min Total Time: 4.518772 s
+srun Wall Time: 5.53 seconds
+--- Running with 16 cores on 4 node(s) ---
+Executing: srun -N4 -n16 ./hw1_prof 536869888 ./testcases/37.in my_37_16cores.out
+N=536869888, Procs=16, Avg Total Time: 4.320280 s
+  Avg IO Time:   2.174198 s (50.33%)
+  Avg Comm Time: 1.336371 s (30.93%)
+  Avg CPU Time:  0.809712 s (18.74%)
+  Max Total Time: 4.320600 s, Min Total Time: 4.320213 s
+srun Wall Time: 5.21 seconds
+--- Running with 17 cores on 4 node(s) ---
+Executing: srun -N4 -n17 ./hw1_prof 536869888 ./testcases/37.in my_37_17cores.out
+N=536869888, Procs=17, Avg Total Time: 4.620099 s
+  Avg IO Time:   2.536845 s (54.91%)
+  Avg Comm Time: 1.300646 s (28.15%)
+  Avg CPU Time:  0.782608 s (16.94%)
+  Max Total Time: 4.620180 s, Min Total Time: 4.619965 s
+srun Wall Time: 5.69 seconds
+--- Running with 18 cores on 4 node(s) ---
+Executing: srun -N4 -n18 ./hw1_prof 536869888 ./testcases/37.in my_37_18cores.out
+N=536869888, Procs=18, Avg Total Time: 4.266501 s
+  Avg IO Time:   2.112042 s (49.50%)
+  Avg Comm Time: 1.277269 s (29.94%)
+  Avg CPU Time:  0.877190 s (20.56%)
+  Max Total Time: 4.266510 s, Min Total Time: 4.266493 s
+srun Wall Time: 6.25 seconds
+--- Running with 19 cores on 4 node(s) ---
+Executing: srun -N4 -n19 ./hw1_prof 536869888 ./testcases/37.in my_37_19cores.out
+N=536869888, Procs=19, Avg Total Time: 4.228633 s
+  Avg IO Time:   2.136147 s (50.52%)
+  Avg Comm Time: 1.359494 s (32.15%)
+  Avg CPU Time:  0.732991 s (17.33%)
+  Max Total Time: 4.228646 s, Min Total Time: 4.228622 s
+srun Wall Time: 5.26 seconds
+--- Running with 20 cores on 4 node(s) ---
+Executing: srun -N4 -n20 ./hw1_prof 536869888 ./testcases/37.in my_37_20cores.out
+N=536869888, Procs=20, Avg Total Time: 4.441147 s
+  Avg IO Time:   2.462248 s (55.44%)
+  Avg Comm Time: 1.293078 s (29.12%)
+  Avg CPU Time:  0.685821 s (15.44%)
+  Max Total Time: 4.441152 s, Min Total Time: 4.441135 s
+srun Wall Time: 5.44 seconds
+--- Running with 21 cores on 4 node(s) ---
+Executing: srun -N4 -n21 ./hw1_prof 536869888 ./testcases/37.in my_37_21cores.out
+N=536869888, Procs=21, Avg Total Time: 4.065972 s
+  Avg IO Time:   2.108440 s (51.86%)
+  Avg Comm Time: 1.274375 s (31.34%)
+  Avg CPU Time:  0.683157 s (16.80%)
+  Max Total Time: 4.066012 s, Min Total Time: 4.065921 s
+srun Wall Time: 5.15 seconds
+--- Running with 22 cores on 4 node(s) ---
+Executing: srun -N4 -n22 ./hw1_prof 536869888 ./testcases/37.in my_37_22cores.out
+N=536869888, Procs=22, Avg Total Time: 3.785823 s
+  Avg IO Time:   1.934240 s (51.09%)
+  Avg Comm Time: 1.202692 s (31.77%)
+  Avg CPU Time:  0.648891 s (17.14%)
+  Max Total Time: 3.785835 s, Min Total Time: 3.785810 s
+srun Wall Time: 4.88 seconds
+--- Running with 23 cores on 4 node(s) ---
+Executing: srun -N4 -n23 ./hw1_prof 536869888 ./testcases/37.in my_37_23cores.out
+N=536869888, Procs=23, Avg Total Time: 3.808758 s
+  Avg IO Time:   1.963013 s (51.54%)
+  Avg Comm Time: 1.244812 s (32.68%)
+  Avg CPU Time:  0.600933 s (15.78%)
+  Max Total Time: 3.808771 s, Min Total Time: 3.808745 s
+srun Wall Time: 4.99 seconds
+--- Running with 24 cores on 4 node(s) ---
+Executing: srun -N4 -n24 ./hw1_prof 536869888 ./testcases/37.in my_37_24cores.out
+N=536869888, Procs=24, Avg Total Time: 3.663345 s
+  Avg IO Time:   1.881781 s (51.37%)
+  Avg Comm Time: 1.242258 s (33.91%)
+  Avg CPU Time:  0.539306 s (14.72%)
+  Max Total Time: 3.663357 s, Min Total Time: 3.663333 s
+srun Wall Time: 4.77 seconds
+--- Running with 25 cores on 4 node(s) ---
+Executing: srun -N4 -n25 ./hw1_prof 536869888 ./testcases/37.in my_37_25cores.out
+N=536869888, Procs=25, Avg Total Time: 5.742109 s
+  Avg IO Time:   3.962895 s (69.01%)
+  Avg Comm Time: 1.219184 s (21.23%)
+  Avg CPU Time:  0.560030 s (9.75%)
+  Max Total Time: 5.742119 s, Min Total Time: 5.742096 s
+srun Wall Time: 6.96 seconds
+--- Running with 26 cores on 4 node(s) ---
+Executing: srun -N4 -n26 ./hw1_prof 536869888 ./testcases/37.in my_37_26cores.out
+srun: job 209572 queued and waiting for resources
+srun: job 209572 has been allocated resources
+N=536869888, Procs=26, Avg Total Time: 3.608553 s
+  Avg IO Time:   1.921042 s (53.24%)
+  Avg Comm Time: 1.163140 s (32.23%)
+  Avg CPU Time:  0.524372 s (14.53%)
+  Max Total Time: 3.608561 s, Min Total Time: 3.608546 s
+srun Wall Time: 4.89 seconds
+--- Running with 27 cores on 4 node(s) ---
+Executing: srun -N4 -n27 ./hw1_prof 536869888 ./testcases/37.in my_37_27cores.out
+N=536869888, Procs=27, Avg Total Time: 3.658964 s
+  Avg IO Time:   1.933697 s (52.85%)
+  Avg Comm Time: 1.230093 s (33.62%)
+  Avg CPU Time:  0.495174 s (13.53%)
+  Max Total Time: 3.659066 s, Min Total Time: 3.658880 s
+srun Wall Time: 4.84 seconds
+--- Running with 28 cores on 4 node(s) ---
+Executing: srun -N4 -n28 ./hw1_prof 536869888 ./testcases/37.in my_37_28cores.out
+N=536869888, Procs=28, Avg Total Time: 3.708158 s
+  Avg IO Time:   2.024642 s (54.60%)
+  Avg Comm Time: 1.182484 s (31.89%)
+  Avg CPU Time:  0.501032 s (13.51%)
+  Max Total Time: 3.708170 s, Min Total Time: 3.708141 s
+srun Wall Time: 5.00 seconds
+--- Running with 29 cores on 4 node(s) ---
+Executing: srun -N4 -n29 ./hw1_prof 536869888 ./testcases/37.in my_37_29cores.out
+srun: job 209580 queued and waiting for resources
+srun: job 209580 has been allocated resources
+N=536869888, Procs=29, Avg Total Time: 3.545766 s
+  Avg IO Time:   1.904213 s (53.70%)
+  Avg Comm Time: 1.163589 s (32.82%)
+  Avg CPU Time:  0.477964 s (13.48%)
+  Max Total Time: 3.545873 s, Min Total Time: 3.545689 s
+srun Wall Time: 4.78 seconds
+--- Running with 30 cores on 4 node(s) ---
+Executing: srun -N4 -n30 ./hw1_prof 536869888 ./testcases/37.in my_37_30cores.out
+srun: job 209582 queued and waiting for resources
+srun: job 209582 has been allocated resources
+N=536869888, Procs=30, Avg Total Time: 3.312688 s
+  Avg IO Time:   1.720077 s (51.92%)
+  Avg Comm Time: 1.171178 s (35.35%)
+  Avg CPU Time:  0.421433 s (12.72%)
+  Max Total Time: 3.312805 s, Min Total Time: 3.312605 s
+srun Wall Time: 4.57 seconds
+--- Running with 31 cores on 4 node(s) ---
+Executing: srun -N4 -n31 ./hw1_prof 536869888 ./testcases/37.in my_37_31cores.out
+N=536869888, Procs=31, Avg Total Time: 3.420134 s
+  Avg IO Time:   1.850231 s (54.10%)
+  Avg Comm Time: 1.112337 s (32.52%)
+  Avg CPU Time:  0.457566 s (13.38%)
+  Max Total Time: 3.420249 s, Min Total Time: 3.420057 s
+srun Wall Time: 4.95 seconds
+--- Running with 32 cores on 4 node(s) ---
+Executing: srun -N4 -n32 ./hw1_prof 536869888 ./testcases/37.in my_37_32cores.out
+N=536869888, Procs=32, Avg Total Time: 3.284438 s
+  Avg IO Time:   1.685781 s (51.33%)
+  Avg Comm Time: 1.182882 s (36.01%)
+  Avg CPU Time:  0.415774 s (12.66%)
+  Max Total Time: 3.284611 s, Min Total Time: 3.284275 s
+srun Wall Time: 4.26 seconds
+--- Running with 33 cores on 4 node(s) ---
+Executing: srun -N4 -n33 ./hw1_prof 536869888 ./testcases/37.in my_37_33cores.out
+N=536869888, Procs=33, Avg Total Time: 3.362860 s
+  Avg IO Time:   1.813725 s (53.93%)
+  Avg Comm Time: 1.115937 s (33.18%)
+  Avg CPU Time:  0.433198 s (12.88%)
+  Max Total Time: 3.362965 s, Min Total Time: 3.362795 s
+srun Wall Time: 4.49 seconds
+--- Running with 34 cores on 4 node(s) ---
+Executing: srun -N4 -n34 ./hw1_prof 536869888 ./testcases/37.in my_37_34cores.out
+N=536869888, Procs=34, Avg Total Time: 4.290784 s
+  Avg IO Time:   2.748195 s (64.05%)
+  Avg Comm Time: 1.136407 s (26.48%)
+  Avg CPU Time:  0.406183 s (9.47%)
+  Max Total Time: 4.290916 s, Min Total Time: 4.290708 s
+srun Wall Time: 5.37 seconds
+--- Running with 35 cores on 4 node(s) ---
+Executing: srun -N4 -n35 ./hw1_prof 536869888 ./testcases/37.in my_37_35cores.out
+N=536869888, Procs=35, Avg Total Time: 3.173041 s
+  Avg IO Time:   1.558317 s (49.11%)
+  Avg Comm Time: 1.204933 s (37.97%)
+  Avg CPU Time:  0.409790 s (12.91%)
+  Max Total Time: 3.173162 s, Min Total Time: 3.172970 s
+srun Wall Time: 4.29 seconds
+--- Running with 36 cores on 4 node(s) ---
+Executing: srun -N4 -n36 ./hw1_prof 536869888 ./testcases/37.in my_37_36cores.out
+N=536869888, Procs=36, Avg Total Time: 3.225084 s
+  Avg IO Time:   1.670006 s (51.78%)
+  Avg Comm Time: 1.150644 s (35.68%)
+  Avg CPU Time:  0.404433 s (12.54%)
+  Max Total Time: 3.225198 s, Min Total Time: 3.225017 s
+srun Wall Time: 4.31 seconds
+--- Running with 37 cores on 4 node(s) ---
+Executing: srun -N4 -n37 ./hw1_prof 536869888 ./testcases/37.in my_37_37cores.out
+N=536869888, Procs=37, Avg Total Time: 3.317868 s
+  Avg IO Time:   1.699501 s (51.22%)
+  Avg Comm Time: 1.230613 s (37.09%)
+  Avg CPU Time:  0.387753 s (11.69%)
+  Max Total Time: 3.318023 s, Min Total Time: 3.317776 s
+srun Wall Time: 4.64 seconds
+--- Running with 38 cores on 4 node(s) ---
+Executing: srun -N4 -n38 ./hw1_prof 536869888 ./testcases/37.in my_37_38cores.out
+N=536869888, Procs=38, Avg Total Time: 3.310150 s
+  Avg IO Time:   1.743952 s (52.68%)
+  Avg Comm Time: 1.177623 s (35.58%)
+  Avg CPU Time:  0.388575 s (11.74%)
+  Max Total Time: 3.310269 s, Min Total Time: 3.310083 s
+srun Wall Time: 4.45 seconds
+--- Running with 39 cores on 4 node(s) ---
+Executing: srun -N4 -n39 ./hw1_prof 536869888 ./testcases/37.in my_37_39cores.out
+N=536869888, Procs=39, Avg Total Time: 3.159682 s
+  Avg IO Time:   1.597549 s (50.56%)
+  Avg Comm Time: 1.202821 s (38.07%)
+  Avg CPU Time:  0.359312 s (11.37%)
+  Max Total Time: 3.159880 s, Min Total Time: 3.159504 s
+srun Wall Time: 5.33 seconds
+--- Running with 40 cores on 4 node(s) ---
+Executing: srun -N4 -n40 ./hw1_prof 536869888 ./testcases/37.in my_37_40cores.out
+N=536869888, Procs=40, Avg Total Time: 3.406579 s
+  Avg IO Time:   1.915112 s (56.22%)
+  Avg Comm Time: 1.139555 s (33.45%)
+  Avg CPU Time:  0.351912 s (10.33%)
+  Max Total Time: 3.406589 s, Min Total Time: 3.406564 s
+srun Wall Time: 4.55 seconds
+--- Running with 41 cores on 4 node(s) ---
+Executing: srun -N4 -n41 ./hw1_prof 536869888 ./testcases/37.in my_37_41cores.out
+N=536869888, Procs=41, Avg Total Time: 3.202458 s
+  Avg IO Time:   1.640967 s (51.24%)
+  Avg Comm Time: 1.210878 s (37.81%)
+  Avg CPU Time:  0.350613 s (10.95%)
+  Max Total Time: 3.202688 s, Min Total Time: 3.202293 s
+srun Wall Time: 4.54 seconds
+--- Running with 42 cores on 4 node(s) ---
+Executing: srun -N4 -n42 ./hw1_prof 536869888 ./testcases/37.in my_37_42cores.out
+N=536869888, Procs=42, Avg Total Time: 3.063361 s
+  Avg IO Time:   1.563494 s (51.04%)
+  Avg Comm Time: 1.125965 s (36.76%)
+  Avg CPU Time:  0.373902 s (12.21%)
+  Max Total Time: 3.063566 s, Min Total Time: 3.063207 s
+srun Wall Time: 4.29 seconds
+--- Running with 43 cores on 4 node(s) ---
+Executing: srun -N4 -n43 ./hw1_prof 536869888 ./testcases/37.in my_37_43cores.out
+N=536869888, Procs=43, Avg Total Time: 3.291086 s
+  Avg IO Time:   1.736704 s (52.77%)
+  Avg Comm Time: 1.203190 s (36.56%)
+  Avg CPU Time:  0.351192 s (10.67%)
+  Max Total Time: 3.291293 s, Min Total Time: 3.290938 s
+srun Wall Time: 4.50 seconds
+--- Running with 44 cores on 4 node(s) ---
+Executing: srun -N4 -n44 ./hw1_prof 536869888 ./testcases/37.in my_37_44cores.out
+N=536869888, Procs=44, Avg Total Time: 3.466474 s
+  Avg IO Time:   1.983438 s (57.22%)
+  Avg Comm Time: 1.162467 s (33.53%)
+  Avg CPU Time:  0.320570 s (9.25%)
+  Max Total Time: 3.472466 s, Min Total Time: 3.464225 s
+srun Wall Time: 4.76 seconds
+--- Running with 45 cores on 4 node(s) ---
+Executing: srun -N4 -n45 ./hw1_prof 536869888 ./testcases/37.in my_37_45cores.out
+N=536869888, Procs=45, Avg Total Time: 3.211221 s
+  Avg IO Time:   1.739815 s (54.18%)
+  Avg Comm Time: 1.133536 s (35.30%)
+  Avg CPU Time:  0.337869 s (10.52%)
+  Max Total Time: 3.211437 s, Min Total Time: 3.211069 s
+srun Wall Time: 4.63 seconds
+--- Running with 46 cores on 4 node(s) ---
+Executing: srun -N4 -n46 ./hw1_prof 536869888 ./testcases/37.in my_37_46cores.out
+N=536869888, Procs=46, Avg Total Time: 2.996357 s
+  Avg IO Time:   1.555285 s (51.91%)
+  Avg Comm Time: 1.114165 s (37.18%)
+  Avg CPU Time:  0.326907 s (10.91%)
+  Max Total Time: 2.996568 s, Min Total Time: 2.996215 s
+srun Wall Time: 4.25 seconds
+--- Running with 47 cores on 4 node(s) ---
+Executing: srun -N4 -n47 ./hw1_prof 536869888 ./testcases/37.in my_37_47cores.out
+N=536869888, Procs=47, Avg Total Time: 3.090107 s
+  Avg IO Time:   1.611801 s (52.16%)
+  Avg Comm Time: 1.151702 s (37.27%)
+  Avg CPU Time:  0.326604 s (10.57%)
+  Max Total Time: 3.090361 s, Min Total Time: 3.089955 s
+srun Wall Time: 4.33 seconds
+--- Running with 48 cores on 4 node(s) ---
+Executing: srun -N4 -n48 ./hw1_prof 536869888 ./testcases/37.in my_37_48cores.out
+N=536869888, Procs=48, Avg Total Time: 3.213292 s
+  Avg IO Time:   1.740151 s (54.15%)
+  Avg Comm Time: 1.159720 s (36.09%)
+  Avg CPU Time:  0.313420 s (9.75%)
+  Max Total Time: 3.213538 s, Min Total Time: 3.213138 s
+srun Wall Time: 4.48 seconds

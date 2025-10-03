@@ -17,7 +17,7 @@
  * A suite of aggressive compiler flags was employed to generate highly optimized,
  * architecture-specific machine code.
  *
- * CXXFLAGS = -std=c++17 -O3 -march=native -flto -fomit-frame-pointer -funroll-loops
+ * CXXFLAGS = -std=c++17 -O3 -march=native
  *
  * - O3: Enables the highest level of general compiler optimizations, including
  *   aggressive loop transformations, function inlining, and auto-vectorization.
@@ -25,13 +25,6 @@
  * - march=native: [CRITICAL] Instructs the compiler to generate code specifically
  *   for the host CPU. This unlocks modern instruction sets like AVX/AVX2, which
  *   significantly accelerate floating-point operations in the merge and sort logic.
- *
- * - flto (Link-Time Optimization): Performs whole-program analysis at the final
- *   link stage, allowing for more effective cross-file optimizations.
- *
- * - fomit-frame-pointer & -funroll-loops: These flags fine-tune code generation by
- *   freeing up an extra CPU register and reducing loop overhead, providing tangible
- *   benefits in the performance-critical, tight loops of the merge algorithm.
  *
  * ----------------------------------------------------------------------------
  * II. Algorithmic Optimizations (DEMO POINTS for Report)
@@ -97,6 +90,7 @@
 #define COLOR_DATA_EXC     0xFFFFA500  // Orange (Data Exchange)
 #define COLOR_LOCAL_SORT   0xFF5FD068  // Spring Green (Local Sort)
 #define COLOR_MERGE_SPLIT  0xFF32CD32  // Lime Green (Merge-Split)
+#define COLOR_SORTED_CHECK 0xFF9B59B6  // Amethyst Purple (Sorted Check)
 #define COLOR_SETUP        0xFFFFBE3D  // Sunflower Yellow
 #define COLOR_DEFAULT      0xFFCBD5E0  // Soft Gray
 
@@ -113,7 +107,7 @@
         } else if (strcmp(name, "Data_Exchange") == 0) { \
             color = COLOR_DATA_EXC; \
         } else if (strcmp(name, "Sorted_Check") == 0) { \
-            color = COLOR_BOUNDARY; \
+            color = COLOR_SORTED_CHECK; \
         } else if (strcmp(name, "Local_Sort") == 0) { \
             color = COLOR_LOCAL_SORT; \
         } else if (strcmp(name, "Merge_Split") == 0) { \
@@ -216,10 +210,11 @@ int main(int argc, char *argv[]) {
     float *local_data = NULL;
     float *recv_data = NULL;
 
-    #ifdef PROFILING
-    NVTX_PUSH("Mem_Alloc");
-    #endif
     if (is_active) {
+
+        #ifdef PROFILING
+        NVTX_PUSH("Mem_Alloc");
+        #endif
         // DEMO POINT 4: Aligned Memory Allocation.
         temp = (float *)aligned_alloc(32, chunk_size_bytes);
         local_data = (float *)aligned_alloc(32, chunk_size_bytes);
@@ -240,11 +235,13 @@ int main(int argc, char *argv[]) {
         #ifdef PROFILING
         NVTX_POP(); // end Mem_Alloc
         #endif
+    } // end is_active
+
+    if (is_active) {
 
         // ========================================================================
         // Block 3: Initial I/O (Read)
         // ========================================================================
-
         #ifdef PROFILING
         temp_start = MPI_Wtime();
         NVTX_PUSH("IO_Read");
@@ -269,8 +266,9 @@ int main(int argc, char *argv[]) {
         #ifdef PROFILING
         NVTX_POP(); // end Local_Sort
         #endif
+    } // end is_active
 
-
+    if (is_active) {
         // ========================================================================
         // Block 5: Main Communication & Computation Loop
         // ========================================================================
@@ -383,7 +381,7 @@ int main(int argc, char *argv[]) {
 
             // DEMO POINT 5: Efficient Early Exit check.
             if (phase >= numtasks / 2 && !phase_odd) {
-                
+
                 #ifdef PROFILING
                 temp_start = MPI_Wtime();
                 NVTX_PUSH("Sorted_Check");
@@ -397,10 +395,13 @@ int main(int argc, char *argv[]) {
                 if (done) break;
             }
 
-    } // end for loop
-    #ifdef PROFILING
-    NVTX_POP();
-    #endif
+        } // end for loop
+        #ifdef PROFILING
+        NVTX_POP(); // end Main_Loop
+        #endif
+    } // end is_active
+
+    if (is_active) {
 
         // ========================================================================
         // Block 6: Final I/O (Write)
@@ -421,21 +422,39 @@ int main(int argc, char *argv[]) {
         free(local_data); free(recv_data); free(temp);
     } // end is_active
 
-
     // ========================================================================
     // Block 7: Finalization and Cleanup
     // ========================================================================
     #ifdef PROFILING
-    MPI_Barrier(MPI_COMM_WORLD); // Synchronize before stopping the main timer
+    MPI_Barrier(MPI_COMM_WORLD);
     double total_time = MPI_Wtime() - total_start_time;
     double cpu_time = total_time - io_time - comm_time;
 
-    // We can gather all timing data to rank 0 for printing
-    if (my_rank == 0) {
-        printf("N=%d, Procs=%d, Total Time: %f s\n", N, numtasks, total_time);
-        printf("  IO Time:   %f s (%f %%)\n", io_time, (io_time / total_time) * 100);
-        printf("  Comm Time: %f s (%f %%)\n", comm_time, (comm_time / total_time) * 100);
-        printf("  CPU Time:  %f s (%f %%)\n", cpu_time, (cpu_time / total_time) * 100);
+    // All processes participate, inactive ones contribute 0
+    double avg_io_time = 0.0, avg_comm_time = 0.0, avg_cpu_time = 0.0, avg_total_time = 0.0;
+    double max_total_time = 0.0, min_total_time = total_time;
+
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    MPI_Reduce(&io_time, &avg_io_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&comm_time, &avg_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&cpu_time, &avg_cpu_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &avg_total_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &min_total_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+
+    if (world_rank == 0 && world_numtasks > 0) {
+        avg_io_time /= world_numtasks;
+        avg_comm_time /= world_numtasks;
+        avg_cpu_time /= world_numtasks;
+        avg_total_time /= world_numtasks;
+        
+        printf("N=%d, Procs=%d, Avg Total Time: %.6f s\n", N, world_numtasks, avg_total_time);
+        printf("  Avg IO Time:   %.6f s (%.2f%%)\n", avg_io_time, (avg_io_time / avg_total_time) * 100);
+        printf("  Avg Comm Time: %.6f s (%.2f%%)\n", avg_comm_time, (avg_comm_time / avg_total_time) * 100);
+        printf("  Avg CPU Time:  %.6f s (%.2f%%)\n", avg_cpu_time, (avg_cpu_time / avg_total_time) * 100);
+        printf("  Max Total Time: %.6f s, Min Total Time: %.6f s\n", max_total_time, min_total_time);
     }
     #endif
 
@@ -478,10 +497,9 @@ void local_sort(float local_data[], const int my_count) {
             local_data[j + 1] = temp_val;
         }
     }
-    // For medium arrays, std::sort (introsort) is a robust and fast choice.
-    else if (my_count < 1025) std::sort(local_data, local_data + my_count);
     // For large arrays, radix-based spreadsort is extremely fast for floats.
     else boost::sort::spreadsort::float_sort(local_data, local_data + my_count);
+    // O(N)
 }
 
 
@@ -514,6 +532,7 @@ void merge_sort_split(float *&local_data, const int my_count, float *recv_data, 
     
     // The O(1) pointer swap, the core of the Zero-Copy strategy.
     std::swap(local_data, temp);
+    //memcpy(local_data, temp, my_count * sizeof(float));
 }
 
 
