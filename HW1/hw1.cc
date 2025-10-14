@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
     const int active_numtasks = std::min(world_numtasks, N);
     int *active_ranks = (int *)malloc(active_numtasks * sizeof(int));
     if (!active_ranks) MPI_Abort(MPI_COMM_WORLD, 1);
-    for (int i = 0; i < active_numtasks; i++) active_ranks[i] = i;
+    for (int i = 0; i < active_numtasks; ++i) active_ranks[i] = i;
 
     MPI_Group_incl(orig_group, active_numtasks, active_ranks, &active_group);
     MPI_Comm_create(MPI_COMM_WORLD, active_group, &active_comm);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
         const int is_odd_rank = (my_rank % 2) ? 1 : 0;
         float partner_boundary = -FLT_MAX;
 
-        for (int phase = 0; phase < max_phases; phase++) {
+        for (int phase = 0; phase < max_phases; ++phase) {
             const int phase_odd = (phase % 2) ? 1 : 0;
             int partner = -1;
 
@@ -487,12 +487,12 @@ void local_sort(float local_data[], const int my_count) {
     
     // For tiny arrays, insertion sort has the lowest overhead.
     if (my_count < 33) {
-        for (int i = 1; i < my_count; i++) {
+        for (int i = 1; i < my_count; ++i) {
             float temp_val = local_data[i];
             int j = i - 1;
             while (j >= 0 && temp_val < local_data[j]) { 
                 local_data[j + 1] = local_data[j];
-                j--; 
+                --j; 
             }
             local_data[j + 1] = temp_val;
         }
