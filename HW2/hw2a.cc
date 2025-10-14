@@ -23,7 +23,6 @@
 #include <string.h>  // For memory manipulation (memset)
 
 typedef struct {
-  int tid;
   int iters;
   int width;  // fix, since we divide by y
   int height;
@@ -65,7 +64,6 @@ int main(int argc, char* argv[]) {
 
   // pthread init
   for (int i = 0; i < num_threads; i++) {
-    t_args[i].tid = i;
     t_args[i].iters = iters;
     t_args[i].width = width;
     t_args[i].height = height;
@@ -100,7 +98,6 @@ int main(int argc, char* argv[]) {
 
 void* local_mandelbrot(void* argv) {
   ThreadArg* t_arg = (ThreadArg*)argv;
-  const int tid = t_arg->tid;
   const int iters = t_arg->iters;
   const int width = t_arg->width;  // fix, since we divide by y
   const int height = t_arg->height;
