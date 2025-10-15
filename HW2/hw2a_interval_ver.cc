@@ -23,6 +23,7 @@
 #include <string.h> // For memory manipulation (memset)
 
 typedef struct {
+
     int tid;
     int num_threads;
     int iters;
@@ -31,7 +32,6 @@ typedef struct {
     int my_height_start;
     int my_height_end;
     int *image;
-    // for main loop usage
     double left;  // Real part start (x0)
     double right; // Real part end (x1)
     double lower; // Imaginary part start (y0)
@@ -42,11 +42,10 @@ void write_png(const char *filename, int iters, int width, int height, const int
 void *local_mandelbrot(void *argv);
 
 int main(int argc, char *argv[]) {
+
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
-    // printf("%d cpus available\n", CPU_COUNT(&cpu_set));
 
-    // assert(argc == 9);
     const char *filename = argv[1];
     const int iters = strtol(argv[2], NULL, 10);
     const double left = strtod(argv[3], NULL);  // Real part start (x0)
@@ -57,28 +56,18 @@ int main(int argc, char *argv[]) {
     const int height = strtol(argv[8], NULL, 10);
 
     int *image = (int *)malloc(width * height * sizeof(int));
-    // assert(image);  // Ensure memory was allocated.
 
     const int num_threads = CPU_COUNT(&cpu_set);
     pthread_t threads[num_threads];
     ThreadArg t_args[num_threads];
 
-    // pthread init
     for (int i = 0; i < num_threads; i++) {
         t_args[i].tid = i;
         t_args[i].num_threads = num_threads;
-
         t_args[i].iters = iters;
         t_args[i].width = width;
         t_args[i].height = height;
-
-        // const int chunk = height / num_threads;
-        // const int remainder = height % num_threads;
-        // t_args[i].my_height_start = chunk * i + (i < remainder ? i : remainder);
-        // t_args[i].my_height_end = t_args[i].my_height_start + chunk - 1 + (i < remainder ? 1 : 0);
-
         t_args[i].image = image;
-
         t_args[i].left = left;
         t_args[i].right = right;
         t_args[i].lower = lower;
@@ -88,84 +77,65 @@ int main(int argc, char *argv[]) {
     }
 
     for (int i = 0; i < num_threads; i++) pthread_join(threads[i], NULL);
-
     write_png(filename, iters, width, height, image);
-
-    // Free the dynamically allocated memory for the image buffer.
     free(image);
 
     return 0;
 }
 
 void *local_mandelbrot(void *argv) {
+
     ThreadArg *t_arg = (ThreadArg *)argv;
     const int tid = t_arg->tid;
     const int num_threads = t_arg->num_threads;
-
     const int iters = t_arg->iters;
     const int width = t_arg->width; // fix, since we divide by y
     const int height = t_arg->height;
-    // const int my_height_start = t_arg->my_height_start;
-    // const int my_height_end = t_arg->my_height_end;
+
     int *image = t_arg->image;
-    // for main loop usage
     const double left = t_arg->left;   // Real part start (x0)
     const double right = t_arg->right; // Real part end (x1)
     const double lower = t_arg->lower; // Imaginary part start (y0)
     const double upper = t_arg->upper; // Imaginary part end (y1)
 
-    // divide this for loop into pthread
-    // for (int j = my_height_start; j <= my_height_end; ++j) { // Loop over rows (y-axis)
+    const double x_scale = (right - left) / width;
+    const double y_scale = (upper - lower) / height;
+
     for (int j = tid; j < height; j += num_threads) {
 
-/*
-        x (width = 8)
-    ┌─────────────────┐
-y=0 │■■■■■■■■│ Thread 0 (tid=0)
-y=1 │▲▲▲▲▲▲▲▲│ Thread 1 (tid=1)
-y=2 │★★★★★★★★│ Thread 2 (tid=2)
-y=3 │■■■■■■■■│ Thread 0 (0+3)
-y=4 │▲▲▲▲▲▲▲▲│ Thread 1 (1+3)
-y=5 │★★★★★★★★│ Thread 2 (2+3)
-y=6 │■■■■■■■■│ Thread 0 (0+6)
-y=7 │▲▲▲▲▲▲▲▲│ Thread 1 (1+6)
-y=8 │★★★★★★★★│ Thread 2 (2+6)
-y=9 │■■■■■■■■│ Thread 0 (0+9)
-y=10│▲▲▲▲▲▲▲▲│ Thread 1 (1+9)
-y=11│★★★★★★★★│ Thread 2 (2+9)
-    └─────────────────┘
-*/
-        
-        // Map the current pixel row 'j' to its corresponding coordinate 'y0' in the
-        // complex plane.
-        const double y0 = j * ((upper - lower) / height) + lower;
-        for (int i = 0; i < width; ++i) { // Loop over columns (x-axis)
-            // Map the current pixel column 'i' to its corresponding coordinate 'x0'
-            // in the complex plane.
-            const double x0 = i * ((right - left) / width) + left;
+        /*
+                x (width = 8)
+            ┌─────────────────┐
+        y=0 │■■■■■■■■│ Thread 0 (tid=0)
+        y=1 │▲▲▲▲▲▲▲▲│ Thread 1 (tid=1)
+        y=2 │★★★★★★★★│ Thread 2 (tid=2)
+        y=3 │■■■■■■■■│ Thread 0 (0+3)
+        y=4 │▲▲▲▲▲▲▲▲│ Thread 1 (1+3)
+        y=5 │★★★★★★★★│ Thread 2 (2+3)
+        y=6 │■■■■■■■■│ Thread 0 (0+6)
+        y=7 │▲▲▲▲▲▲▲▲│ Thread 1 (1+6)
+        y=8 │★★★★★★★★│ Thread 2 (2+6)
+        y=9 │■■■■■■■■│ Thread 0 (0+9)
+        y=10│▲▲▲▲▲▲▲▲│ Thread 1 (1+9)
+        y=11│★★★★★★★★│ Thread 2 (2+9)
+            └─────────────────┘
+        */
 
+        const double y0 = j * y_scale + lower;
+        for (int i = 0; i < width; ++i) {
+
+            const double x0 = i * x_scale + left;
+            double x = 0, y = 0, length_squared = 0;
             int repeats = 0;
-            double x = 0;
-            double y = 0;
-            double length_squared = 0;
+            for (; repeats < iters; ++repeats) {
 
-            // This is the core Mandelbrot iteration for the complex number c = x0 +
-            // i*y0. The loop continues until the point escapes (its distance from
-            // origin > 2) or the maximum number of iterations is reached.
-            while (repeats < iters && length_squared < 4) {
-                // z_new = z^2 + c
-                // z = x + iy
-                // z^2 = (x^2 - y^2) + i(2xy)
-                // z_new = (x^2 - y^2 + x0) + i(2xy + y0)
+                if (length_squared >= 4) break;
                 double temp = x * x - y * y + x0;
                 y = 2 * x * y + y0;
                 x = temp;
                 length_squared = x * x + y * y;
-                ++repeats;
             }
 
-            // Store the number of iterations it took for the point to escape.
-            // This value will be used to determine the pixel's color.
             image[j * width + i] = repeats;
         }
     }
