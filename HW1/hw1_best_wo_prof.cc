@@ -71,13 +71,13 @@
  */
 
 /* Headers */
-#include <stdio.h>
-#include <stdlib.h>
-#include <float.h>
-#include <mpi.h>
 #include <algorithm>
 #include <boost/sort/spreadsort/spreadsort.hpp>
 #include <errno.h> // For strtol error checking
+#include <float.h>
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /* Function Prototypes */
 void local_sort(float local_data[], const int my_count);
@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
     char *endptr;
     long val = strtol(argv[1], &endptr, 10);
     const int N = (int)val;
-    
+
     /* MPI Init and Grouping for active processes */
     MPI_Group orig_group, active_group;
     MPI_Comm active_comm;
@@ -109,14 +109,14 @@ int main(int argc, char *argv[]) {
 
     MPI_Group_incl(orig_group, active_numtasks, active_ranks, &active_group);
     MPI_Comm_create(MPI_COMM_WORLD, active_group, &active_comm);
-    
+
     int numtasks = 0, my_rank = -1;
     if (active_comm != MPI_COMM_NULL) {
         MPI_Comm_size(active_comm, &numtasks);
         MPI_Comm_rank(active_comm, &my_rank);
     }
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
     /* Data distribution and I/O preparation */
     const int valid_tasks = (numtasks > 0) ? 1 : 0;
     const int valid_rank = (my_rank != -1) ? 1 : 0;
@@ -151,19 +151,19 @@ int main(int argc, char *argv[]) {
             if (temp) free(temp);
             if (local_data) free(local_data);
             if (recv_data) free(recv_data);
-            
+
             temp = (float *)malloc(chunk_size_bytes);
             local_data = (float *)malloc(chunk_size_bytes);
             recv_data = (float *)malloc(chunk_size_bytes);
-            
+
             if (!temp || !local_data || !recv_data) MPI_Abort(active_comm, 1);
         }
-        
+
         // Initial data read and sort.
         MPI_File_open(active_comm, input_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &input_file);
         MPI_File_read_at(input_file, my_start_index * sizeof(float), local_data, my_count, MPI_FLOAT, MPI_STATUS_IGNORE);
         MPI_File_close(&input_file);
-        
+
         // DEMO POINT 3: Adaptive Local Sort is called here.
         local_sort(local_data, my_count);
 
@@ -180,39 +180,31 @@ int main(int argc, char *argv[]) {
             else partner = (is_odd_rank) ? my_rank - 1 : my_rank + 1;
             if ((partner < 0) || (partner >= numtasks)) partner = MPI_PROC_NULL;
             const int valid_comm = (partner != MPI_PROC_NULL) ? 1 : 0;
-            
+
             if (valid_comm) {
                 const int recv_count = (partner < remainder) ? base_chunk_size + 1 : base_chunk_size;
                 // DEMO POINT 6: Unique MPI tags ensure message correctness.
                 const int mpi_boundary_tag = 2 * phase;
                 const int mpi_data_tag = 2 * phase + 1;
                 const int is_left = (my_rank < partner) ? 1 : 0;
-                
+
                 // DEMO POINT 1: Conditional Merge-Split logic begins here.
                 if (is_left) {
                     const float my_last = local_data[my_count - 1];
-                    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                                 &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                                 active_comm, MPI_STATUS_IGNORE);
-                    
+                    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, partner, mpi_boundary_tag, &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag, active_comm, MPI_STATUS_IGNORE);
+
                     if (my_last > partner_boundary) {
-                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
-                                     recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
-                                     active_comm, MPI_STATUS_IGNORE);
+                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag, recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag, active_comm, MPI_STATUS_IGNORE);
                         // DEMO POINT 2: Zero-Copy Merge-Split is called here.
                         merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
                     }
-                
+
                 } else { // I am the right process.
                     const float my_first = local_data[0];
-                    MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                                 &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag,
-                                 active_comm, MPI_STATUS_IGNORE);
-                    
+                    MPI_Sendrecv(&my_first, 1, MPI_FLOAT, partner, mpi_boundary_tag, &partner_boundary, 1, MPI_FLOAT, partner, mpi_boundary_tag, active_comm, MPI_STATUS_IGNORE);
+
                     if (my_first < partner_boundary) {
-                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag,
-                                     recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag,
-                                     active_comm, MPI_STATUS_IGNORE);
+                        MPI_Sendrecv(local_data, my_count, MPI_FLOAT, partner, mpi_data_tag, recv_data, recv_count, MPI_FLOAT, partner, mpi_data_tag, active_comm, MPI_STATUS_IGNORE);
                         // DEMO POINT 2: Zero-Copy Merge-Split is called here.
                         merge_sort_split(local_data, my_count, recv_data, recv_count, temp, is_left);
                     }
@@ -244,7 +236,6 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
 /**
  * @brief Sorts the local data array using an adaptive strategy.
  * DEMO POINT 3: This function implements the adaptive local sort. It chooses
@@ -253,25 +244,25 @@ int main(int argc, char *argv[]) {
  */
 void local_sort(float local_data[], const int my_count) {
     if (my_count < 2) return;
-    
+
     // For tiny arrays, insertion sort has the lowest overhead.
     if (my_count < 33) {
         for (int i = 1; i < my_count; i++) {
             float temp_val = local_data[i];
             int j = i - 1;
-            while (j >= 0 && temp_val < local_data[j]) { 
+            while (j >= 0 && temp_val < local_data[j]) {
                 local_data[j + 1] = local_data[j];
-                j--; 
+                j--;
             }
             local_data[j + 1] = temp_val;
         }
     }
     // For medium arrays, std::sort (introsort) is a robust and fast choice.
-    else if (my_count < 1025) std::sort(local_data, local_data + my_count);
+    else if (my_count < 1025)
+        std::sort(local_data, local_data + my_count);
     // For large arrays, radix-based spreadsort is extremely fast for floats.
     else boost::sort::spreadsort::float_sort(local_data, local_data + my_count);
 }
-
 
 /**
  * @brief Merges local data with received data from a partner process.
@@ -282,28 +273,23 @@ void local_sort(float local_data[], const int my_count) {
 void merge_sort_split(float *&local_data, const int my_count, float *recv_data, const int recv_count, float *&temp, const int is_left) {
     // Guard clause for cases with no data to merge.
     if (my_count < 1) return;
-    
+
     if (is_left) { // I am the left process, I keep the smaller elements.
         int i = 0, j = 0, k = 0;
-        while (k < my_count && i < my_count && j < recv_count) {
-            temp[k++] = (local_data[i] <= recv_data[j]) ? local_data[i++] : recv_data[j++];
-        }
+        while (k < my_count && i < my_count && j < recv_count) temp[k++] = (local_data[i] <= recv_data[j]) ? local_data[i++] : recv_data[j++];
         while (k < my_count && i < my_count) temp[k++] = local_data[i++];
         while (k < my_count && j < recv_count) temp[k++] = recv_data[j++];
 
     } else { // I am the right process, I keep the larger elements.
         int i = my_count - 1, j = recv_count - 1, k = my_count - 1;
-        while (k >= 0 && i >= 0 && j >= 0) {
-            temp[k--] = (local_data[i] >= recv_data[j]) ? local_data[i--] : recv_data[j--];
-        }
+        while (k >= 0 && i >= 0 && j >= 0) temp[k--] = (local_data[i] >= recv_data[j]) ? local_data[i--] : recv_data[j--];
         while (k >= 0 && i >= 0) temp[k--] = local_data[i--];
         while (k >= 0 && j >= 0) temp[k--] = recv_data[j--];
     }
-    
+
     // The O(1) pointer swap, the core of the Zero-Copy strategy.
     std::swap(local_data, temp);
 }
-
 
 /**
  * @brief Checks if the global array is sorted by verifying boundary elements.
@@ -312,26 +298,24 @@ void merge_sort_split(float *&local_data, const int my_count, float *recv_data, 
 int sorted_check(float *local_data, const int my_count, const int my_rank, const int numtasks, const int phase, MPI_Comm comm) {
     const int prev_rank = (my_rank > 0) ? my_rank - 1 : MPI_PROC_NULL;
     const int next_rank = (my_rank < numtasks - 1) ? my_rank + 1 : MPI_PROC_NULL;
-    
+
     // Robustly handle cases where my_count is 0.
     const float my_first = (my_count > 0) ? local_data[0] : FLT_MAX;
     const float my_last = (my_count > 0) ? local_data[my_count - 1] : -FLT_MAX;
-    
+
     int boundary_sorted = 1, global_sorted = 0;
     float prev_last = -FLT_MAX;
 
     // Each process sends its last element to its right neighbor and receives
     // the last element from its left neighbor.
-    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, next_rank, phase,
-                 &prev_last, 1, MPI_FLOAT, prev_rank, phase,
-                 comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(&my_last, 1, MPI_FLOAT, next_rank, phase, &prev_last, 1, MPI_FLOAT, prev_rank, phase, comm, MPI_STATUS_IGNORE);
 
     // If my left neighbor's last element is greater than my first, we are not sorted.
     if (my_rank > 0 && my_count > 0 && prev_last > my_first) boundary_sorted = 0;
-    
+
     // Perform a global AND operation. If any process found an unsorted boundary,
     // the global result will be 0.
     MPI_Allreduce(&boundary_sorted, &global_sorted, 1, MPI_INT, MPI_LAND, comm);
-    
+
     return global_sorted;
 }

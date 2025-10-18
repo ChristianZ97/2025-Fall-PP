@@ -174,8 +174,7 @@ void write_png(const char *filename, int iters, int width, int height, const int
     // Write the PNG header information.
     // This includes width, height, bit depth (8 bits per channel), color type
     // (RGB), and other standard PNG settings.
-    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
     // Disable PNG filtering for simplicity and speed.
     png_set_filter(png_ptr, 0, PNG_NO_FILTERS);

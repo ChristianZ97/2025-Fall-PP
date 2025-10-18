@@ -2,23 +2,22 @@
 #define _GNU_SOURCE
 #endif
 #define PNG_NO_SETJMP
-#include <sched.h>
 #include <assert.h>
 #include <png.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
-    FILE* fp = fopen(filename, "wb");
+void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
+    FILE *fp = fopen(filename, "wb");
     assert(fp);
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     assert(png_ptr);
     png_infop info_ptr = png_create_info_struct(png_ptr);
     assert(info_ptr);
     png_init_io(png_ptr, fp);
-    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
     png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
     png_write_info(png_ptr, info_ptr);
     png_set_compression_level(png_ptr, 1);
@@ -46,7 +45,7 @@ void write_png(const char* filename, int iters, int width, int height, const int
     fclose(fp);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     /* detect how many CPUs are available */
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
@@ -54,7 +53,7 @@ int main(int argc, char** argv) {
 
     /* argument parsing */
     assert(argc == 9);
-    const char* filename = argv[1];
+    const char *filename = argv[1];
     int iters = strtol(argv[2], 0, 10);
     double left = strtod(argv[3], 0);
     double right = strtod(argv[4], 0);
@@ -64,7 +63,7 @@ int main(int argc, char** argv) {
     int height = strtol(argv[8], 0, 10);
 
     /* allocate memory for image */
-    int* image = (int*)malloc(width * height * sizeof(int));
+    int *image = (int *)malloc(width * height * sizeof(int));
     assert(image);
 
     /* mandelbrot set */
