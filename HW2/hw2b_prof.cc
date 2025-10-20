@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <assert.h> // For assertions (assert)
 #include <cmath>
+#include <emmintrin.h> // SSE2
 #include <mpi.h>
 #include <omp.h>
 #include <png.h>    // For the libpng library, used to write PNG files
@@ -132,7 +133,55 @@ int main(int argc, char *argv[]) {
         for (int j = my_start; j < my_start + my_count; ++j) {
             const double y0 = j * y_scale + lower;
 #pragma GCC ivdep
-            for (int i = 0; i < width; ++i) {
+            for (int i = 0; i < width - 1; i += 2) {
+
+                __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+                // const double x0 = i * x_scale + left;
+                __m128d y0_vec = _mm_set1_pd(y0);
+
+                __m128d x_vec = _mm_setzero_pd(); // x = [0.0, 0.0]
+                __m128d y_vec = _mm_setzero_pd(); // y = [0.0, 0.0]
+                // double x = 0, y = 0;
+                int repeats[2] = {0, 0};
+                // int repeats = 0;
+                int active = 3;
+
+                __m128d four = _mm_set1_pd(4.0);
+                __m128d two = _mm_set1_pd(2.0);
+
+                for (int r = 0; r < iters && active; ++r) {
+                    __m128d x2 = _mm_mul_pd(x_vec, x_vec); // [x[0]^2, x[1]^2]
+                    // double x2 = x * x;
+                    __m128d y2 = _mm_mul_pd(y_vec, y_vec); // [y[0]^2, y[1]^2]
+                    // double y2 = y * y;
+                    __m128d len_sq = _mm_add_pd(x2, y2);
+
+                    __m128d cmp = _mm_cmplt_pd(len_sq, four); // < 4.0 ?
+                    int mask = _mm_movemask_pd(cmp);
+
+                    if (mask & 1) repeats[0]++;
+                    if (mask & 2) repeats[1]++;
+                    active = mask;
+
+                    if (!active) break;
+                    // if (x2 + y2 >= 4) break;
+
+                    __m128d xy = _mm_mul_pd(x_vec, y_vec);
+                    __m128d temp_y = _mm_add_pd(_mm_add_pd(xy, xy), y0_vec);
+                    // y = xy + xy + y0;
+                    __m128d temp_x = _mm_add_pd(_mm_sub_pd(x2, y2), x0_vec);
+                    // x = x2 - y2 + x0;
+
+                    x_vec = temp_x;
+                    y_vec = temp_y;
+                }
+                image[(j - my_start) * width + i] = repeats[0];
+                image[(j - my_start) * width + i + 1] = repeats[1];
+                // image[j * width + i] = repeats;
+            }
+
+            if (width % 2 == 1) {
+                const int i = width - 1;
                 const double x0 = i * x_scale + left;
                 double x = 0, y = 0, length_squared = 0;
                 int repeats = 0;

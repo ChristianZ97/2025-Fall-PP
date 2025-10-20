@@ -280,6 +280,9 @@ void *local_mandelbrot(void *argv) {
                 // int repeats = 0;
                 int active = 3;
 
+                __m128d four = _mm_set1_pd(4.0);
+                __m128d two = _mm_set1_pd(2.0);
+
                 for (int r = 0; r < iters && active; ++r) {
                     __m128d x2 = _mm_mul_pd(x_vec, x_vec); // [x[0]^2, x[1]^2]
                     // double x2 = x * x;
@@ -287,7 +290,6 @@ void *local_mandelbrot(void *argv) {
                     // double y2 = y * y;
                     __m128d len_sq = _mm_add_pd(x2, y2);
 
-                    __m128d four = _mm_set1_pd(4.0);
                     __m128d cmp = _mm_cmplt_pd(len_sq, four); // < 4.0 ?
                     int mask = _mm_movemask_pd(cmp);
 
@@ -298,9 +300,9 @@ void *local_mandelbrot(void *argv) {
                     if (!active) break;
                     // if (x2 + y2 >= 4) break;
 
-                    __m128d two = _mm_set1_pd(2.0);
-                    __m128d temp_y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(two, x_vec), y_vec), y0_vec);
-                    // y = 2 * x * y + y0;
+                    __m128d xy = _mm_mul_pd(x_vec, y_vec);
+                    __m128d temp_y = _mm_add_pd(_mm_add_pd(xy, xy), y0_vec);
+                    // y = xy + xy + y0;
                     __m128d temp_x = _mm_add_pd(_mm_sub_pd(x2, y2), x0_vec);
                     // x = x2 - y2 + x0;
 
