@@ -173,8 +173,8 @@ int main(int argc, char *argv[]) {
                     x_vec = temp_x;
                     y_vec = temp_y;
                 }
-                image[j * width + i] = repeats[0];
-                image[j * width + i + 1] = repeats[1];
+                image[(j - my_start) * width + i] = repeats[0];
+                image[(j - my_start) * width + i + 1] = repeats[1];
                 // image[j * width + i] = repeats;
             }
 
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
                     y = 2 * x * y + y0;
                     x = x2 - y2 + x0;
                 }
-                image[j * width + i] = repeats;
+                image[(j - my_start) * width + i] = repeats;
             }
         }
     }
