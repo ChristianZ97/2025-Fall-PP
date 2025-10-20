@@ -311,112 +311,98 @@ void *local_mandelbrot(void *argv) {
                 image[j * width + i + 1] = repeats[1];
                 // image[j * width + i] = repeats;
             }
-
-            if (width % 2 == 1) {
-                const int i = width - 1;
-                const double x0 = i * x_scale + left;
-                double x = 0, y = 0, length_squared = 0;
-                int repeats = 0;
-                for (; repeats < iters; ++repeats) {
-                    double x2 = x * x;
-                    double y2 = y * y;
-                    if (x2 + y2 >= 4) break;
-                    y = 2 * x * y + y0;
-                    x = x2 - y2 + x0;
-                }
-                image[j * width + i] = repeats;
-            }
-#ifdef PROFILING
-            local_compute_time += get_wall_time() - compute_start;
-#endif
         }
-
 #ifdef PROFILING
-        t_arg->compute_time = local_compute_time;
-        t_arg->sync_time = local_sync_time;
+        local_compute_time += get_wall_time() - compute_start;
 #endif
-
-        return NULL;
     }
 
-    /**
-     * @brief Writes the raw iteration data into a PNG image file.
-     *
-     * @param filename The name of the output PNG file.
-     * @param iters The maximum number of iterations used for the calculation.
-     * @param width The width of the image in pixels.
-     * @param height The height of the image in pixels.
-     * @param buffer A pointer to an integer array of size width*height, where each
-     *               element stores the number of iterations for the corresponding
-     *               pixel.
-     */
-    void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
-        // Open the file for writing in binary mode.
-        FILE *fp = fopen(filename, "wb");
-        // assert(fp);  // Ensure the file was opened successfully.
+#ifdef PROFILING
+    t_arg->compute_time = local_compute_time;
+    t_arg->sync_time = local_sync_time;
+#endif
 
-        // Initialize the libpng structures for writing.
-        png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-        // assert(png_ptr);  // Ensure the png_struct was created.
-        png_infop info_ptr = png_create_info_struct(png_ptr);
-        // assert(info_ptr);  // Ensure the info_struct was created.
+    return NULL;
+}
 
-        // Set up the output stream for libpng.
-        png_init_io(png_ptr, fp);
+/**
+ * @brief Writes the raw iteration data into a PNG image file.
+ *
+ * @param filename The name of the output PNG file.
+ * @param iters The maximum number of iterations used for the calculation.
+ * @param width The width of the image in pixels.
+ * @param height The height of the image in pixels.
+ * @param buffer A pointer to an integer array of size width*height, where each
+ *               element stores the number of iterations for the corresponding
+ *               pixel.
+ */
+void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
+    // Open the file for writing in binary mode.
+    FILE *fp = fopen(filename, "wb");
+    // assert(fp);  // Ensure the file was opened successfully.
 
-        // Write the PNG header information.
-        png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    // Initialize the libpng structures for writing.
+    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    // assert(png_ptr);  // Ensure the png_struct was created.
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    // assert(info_ptr);  // Ensure the info_struct was created.
 
-        // Disable PNG filtering for simplicity and speed.
-        png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
+    // Set up the output stream for libpng.
+    png_init_io(png_ptr, fp);
 
-        // Write the info chunk to the file.
-        png_write_info(png_ptr, info_ptr);
+    // Write the PNG header information.
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
-        // Set the compression level (1 is a good balance between speed and size).
-        png_set_compression_level(png_ptr, 1);
+    // Disable PNG filtering for simplicity and speed.
+    png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
 
-        // Allocate a buffer for a single row of the image. Each pixel is 3 bytes (R, G, B).
-        size_t row_size = 3 * width * sizeof(png_byte);
-        png_bytep row = (png_bytep)malloc(row_size);
+    // Write the info chunk to the file.
+    png_write_info(png_ptr, info_ptr);
 
-        // Iterate through each row of the image data.
-        for (int y = 0; y < height; ++y) {
-            // Clear the row buffer to black (0,0,0).
-            memset(row, 0, row_size);
+    // Set the compression level (1 is a good balance between speed and size).
+    png_set_compression_level(png_ptr, 1);
 
-            // Iterate through each pixel in the row.
-            for (int x = 0; x < width; ++x) {
-                // Get the iteration count for the current pixel.
-                int p = buffer[(height - 1 - y) * width + x];
+    // Allocate a buffer for a single row of the image. Each pixel is 3 bytes (R, G, B).
+    size_t row_size = 3 * width * sizeof(png_byte);
+    png_bytep row = (png_bytep)malloc(row_size);
 
-                // Get a pointer to the start of the color data for this pixel.
-                png_bytep color = row + x * 3;
+    // Iterate through each row of the image data.
+    for (int y = 0; y < height; ++y) {
+        // Clear the row buffer to black (0,0,0).
+        memset(row, 0, row_size);
 
-                // If the point escaped (p != iters), assign a color to it.
-                if (p != iters) {
-                    if (p & 16) {
-                        color[0] = 240;                      // Red component
-                        color[1] = color[2] = (p % 16) * 16; // Green and Blue components
-                    } else {
-                        color[0] = (p % 16) * 16; // Red component
-                    }
+        // Iterate through each pixel in the row.
+        for (int x = 0; x < width; ++x) {
+            // Get the iteration count for the current pixel.
+            int p = buffer[(height - 1 - y) * width + x];
+
+            // Get a pointer to the start of the color data for this pixel.
+            png_bytep color = row + x * 3;
+
+            // If the point escaped (p != iters), assign a color to it.
+            if (p != iters) {
+                if (p & 16) {
+                    color[0] = 240;                      // Red component
+                    color[1] = color[2] = (p % 16) * 16; // Green and Blue components
+                } else {
+                    color[0] = (p % 16) * 16; // Red component
                 }
             }
-
-            // Write the completed row to the PNG file.
-            png_write_row(png_ptr, row);
         }
 
-        // Free the memory for the row buffer.
-        free(row);
-
-        // Finalize the PNG file.
-        png_write_end(png_ptr, NULL);
-
-        // Clean up the libpng structures.
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-
-        // Close the file.
-        fclose(fp);
+        // Write the completed row to the PNG file.
+        png_write_row(png_ptr, row);
     }
+
+    // Free the memory for the row buffer.
+    free(row);
+
+    // Finalize the PNG file.
+    png_write_end(png_ptr, NULL);
+
+    // Clean up the libpng structures.
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+
+    // Close the file.
+    fclose(fp);
+}
