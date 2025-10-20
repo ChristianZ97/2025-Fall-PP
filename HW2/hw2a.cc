@@ -311,6 +311,21 @@ void *local_mandelbrot(void *argv) {
                 image[j * width + i + 1] = repeats[1];
                 // image[j * width + i] = repeats;
             }
+
+            if (width % 2 == 1) {
+                const int i = width - 1;
+                const double x0 = i * x_scale + left;
+                double x = 0, y = 0, length_squared = 0;
+                int repeats = 0;
+                for (; repeats < iters; ++repeats) {
+                    double x2 = x * x;
+                    double y2 = y * y;
+                    if (x2 + y2 >= 4) break;
+                    y = 2 * x * y + y0;
+                    x = x2 - y2 + x0;
+                }
+                image[j * width + i] = repeats;
+            }
         }
 #ifdef PROFILING
         local_compute_time += get_wall_time() - compute_start;
