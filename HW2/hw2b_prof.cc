@@ -1,6 +1,6 @@
 /*
  * This program generates a visualization of the Mandelbrot set.
- * It is a pthread implementation that calculates the set for a specified
+ * It is an MPI+OpenMP hybrid implementation that calculates the set for a specified
  * region of the complex plane and saves the output as a PNG image.
  *
  * NOTE: Profiling code is added within #ifdef PROFILING blocks.
@@ -12,9 +12,12 @@
 #endif
 #define PNG_NO_SETJMP
 
+#include <algorithm>
 #include <assert.h> // For assertions (assert)
+#include <cmath>
+#include <mpi.h>
+#include <omp.h>
 #include <png.h>    // For the libpng library, used to write PNG files
-#include <pthread.h>
 #include <sched.h>  // For CPU affinity functions (sched_getaffinity, CPU_COUNT)
 #include <stdio.h>  // For standard I/O (printf, fopen, etc.)
 #include <stdlib.h> // For general utilities (strtol, strtod, malloc, free)
@@ -22,14 +25,13 @@
 
 #ifdef PROFILING
 #include <nvtx3/nvToolsExt.h>
-#include <sys/time.h>
 
 // ============================================================================
 // NVTX Color Definitions for Performance Profiling
 // ============================================================================
 #define COLOR_IO 0xFF5C9FFF      // Azure Blue
 #define COLOR_COMPUTE 0xFF5FD068 // Spring Green (Computation)
-#define COLOR_SYNC 0xFFFF6B81    // Rose Red (Synchronization)
+#define COLOR_COMM 0xFFFFA500    // Orange (Communication)
 #define COLOR_SETUP 0xFFFFBE3D   // Sunflower Yellow
 #define COLOR_DEFAULT 0xFFCBD5E0 // Soft Gray
 
@@ -43,9 +45,9 @@
             color = COLOR_IO;                                                                                                                                                                          \
         } else if (strstr(name, "Compute") != NULL) {                                                                                                                                                  \
             color = COLOR_COMPUTE;                                                                                                                                                                     \
-        } else if (strstr(name, "Sync") != NULL || strstr(name, "Join") != NULL) {                                                                                                                     \
-            color = COLOR_SYNC;                                                                                                                                                                        \
-        } else if (strcmp(name, "Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) {                                                                                                                     \
+        } else if (strstr(name, "Comm_") != NULL || strstr(name, "Gather") != NULL) {                                                                                                                  \
+            color = COLOR_COMM;                                                                                                                                                                        \
+        } else if (strcmp(name, "MPI_Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) {                                                                                                                 \
             color = COLOR_SETUP;                                                                                                                                                                       \
         } else {                                                                                                                                                                                       \
             color = COLOR_DEFAULT;                                                                                                                                                                     \
@@ -61,50 +63,27 @@
     } while (0)
 
 #define NVTX_POP() nvtxRangePop()
-
-// Helper function to get wall time
-static inline double get_wall_time() {
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    return (double)time.tv_sec + (double)time.tv_usec * 1e-6;
-}
 #endif
-
-#define CHUNK_SIZE 1
-
-pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
-int next_row = 0;
-
-typedef struct {
-    int iters;
-    int width; // fix, since we divide by y
-    int height;
-    int my_height_start;
-    int my_height_end;
-    int *image;
-    double left;  // Real part start (x0)
-    double right; // Real part end (x1)
-    double lower; // Imaginary part start (y0)
-    double upper; // Imaginary part end (y1)
-#ifdef PROFILING
-    double compute_time;
-    double sync_time;
-#endif
-} ThreadArg;
 
 void write_png(const char *filename, int iters, int width, int height, const int *buffer);
-void *local_mandelbrot(void *argv);
 
 int main(int argc, char *argv[]) {
+    // ========================================================================
+    // Block 1: MPI Initialization
+    // ========================================================================
+    MPI_Init(&argc, &argv);
+
 #ifdef PROFILING
-    double total_start_time, temp_start, io_time = 0.0;
-    total_start_time = get_wall_time();
-    NVTX_PUSH("Setup");
+    double total_start_time, temp_start, io_time = 0.0, comm_time = 0.0;
+    MPI_Barrier(MPI_COMM_WORLD); // Synchronize before starting the main timer
+    total_start_time = MPI_Wtime();
+    NVTX_PUSH("MPI_Setup");
 #endif
 
-    // ========================================================================
-    // Block 1: Initialization and Setup
-    // ========================================================================
+    int numtasks = 0, my_rank = -1;
+    MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
@@ -117,153 +96,40 @@ int main(int argc, char *argv[]) {
     const int width = strtol(argv[7], NULL, 10);
     const int height = strtol(argv[8], NULL, 10);
 
+    const int num_threads = CPU_COUNT(&cpu_set);
+
+    const int base_chunk_size = height / numtasks;
+    const int remainder = height % numtasks;
+    const int my_count = (my_rank < remainder) ? base_chunk_size + 1 : base_chunk_size;
+    const int my_start = (my_rank * base_chunk_size + std::min(my_rank, remainder));
+
 #ifdef PROFILING
-    NVTX_POP(); // end Setup
+    NVTX_POP(); // end MPI_Setup
     NVTX_PUSH("Mem_Alloc");
 #endif
 
-    int *image = (int *)malloc(width * height * sizeof(int));
-    int num_threads = CPU_COUNT(&cpu_set);
-    pthread_t threads[num_threads];
-    ThreadArg t_args[num_threads];
+    int *global_image = NULL;
+    int *image = (int *)malloc(width * my_count * sizeof(int));
+    if (my_rank == 0) global_image = (int *)malloc(width * height * sizeof(int));
+
+    const double x_scale = (right - left) / width;
+    const double y_scale = (upper - lower) / height;
 
 #ifdef PROFILING
     NVTX_POP(); // end Mem_Alloc
 #endif
 
     // ========================================================================
-    // Block 2: Thread Creation and Computation
+    // Block 2: Main Computation (Hybrid MPI+OpenMP)
     // ========================================================================
 #ifdef PROFILING
-    NVTX_PUSH("Compute_Main");
+    NVTX_PUSH("Compute_Mandelbrot");
 #endif
 
-    for (int i = 0; i < num_threads; i++) {
-        t_args[i].iters = iters;
-        t_args[i].width = width;
-        t_args[i].height = height;
-        t_args[i].image = image;
-        t_args[i].left = left;
-        t_args[i].right = right;
-        t_args[i].lower = lower;
-        t_args[i].upper = upper;
-#ifdef PROFILING
-        t_args[i].compute_time = 0.0;
-        t_args[i].sync_time = 0.0;
-#endif
-        pthread_create(&threads[i], NULL, local_mandelbrot, (void *)&t_args[i]);
-    }
-
-#ifdef PROFILING
-    NVTX_PUSH("Thread_Join");
-#endif
-
-    for (int i = 0; i < num_threads; i++) pthread_join(threads[i], NULL);
-
-#ifdef PROFILING
-    NVTX_POP(); // end Thread_Join
-    NVTX_POP(); // end Compute_Main
-#endif
-
-    // ========================================================================
-    // Block 3: Output I/O
-    // ========================================================================
-#ifdef PROFILING
-    temp_start = get_wall_time();
-    NVTX_PUSH("IO_Write");
-#endif
-
-    write_png(filename, iters, width, height, image);
-
-#ifdef PROFILING
-    io_time += get_wall_time() - temp_start;
-    NVTX_POP(); // end IO_Write
-#endif
-
-    free(image);
-
-    // ========================================================================
-    // Block 4: Profiling Results Summary
-    // ========================================================================
-#ifdef PROFILING
-    double total_time = get_wall_time() - total_start_time;
-
-    // Aggregate thread timings and find min/max
-    double total_compute_time = 0.0, total_sync_time = 0.0;
-    double max_compute = 0.0, min_compute = 1e9;
-    int slowest_thread = 0, fastest_thread = 0;
-
-    for (int i = 0; i < num_threads; i++) {
-        total_compute_time += t_args[i].compute_time;
-        total_sync_time += t_args[i].sync_time;
-
-        if (t_args[i].compute_time > max_compute) {
-            max_compute = t_args[i].compute_time;
-            slowest_thread = i;
-        }
-        if (t_args[i].compute_time < min_compute) {
-            min_compute = t_args[i].compute_time;
-            fastest_thread = i;
-        }
-    }
-
-    double avg_compute_time = total_compute_time / num_threads;
-    double avg_sync_time = total_sync_time / num_threads;
-    double cpu_time = total_time - io_time;
-    double imbalance = (max_compute > 0) ? (max_compute - min_compute) / max_compute * 100 : 0.0;
-
-    printf("Threads=%d, Total Time: %.6f s\n", num_threads, total_time);
-    printf("  IO Time: %.6f s (%.2f%%)\n", io_time, (io_time / total_time) * 100);
-    printf("  Avg Thread Compute Time: %.6f s (%.2f%%)\n", avg_compute_time, (avg_compute_time / total_time) * 100);
-    printf("  Avg Thread Sync Time: %.6f s (%.2f%%)\n", avg_sync_time, (avg_sync_time / total_time) * 100);
-    printf("  CPU Time: %.6f s (%.2f%%)\n", cpu_time, (cpu_time / total_time) * 100);
-    printf("  Thread Load Balance:\n");
-    printf("    Slowest Thread %d: %.6f s\n", slowest_thread, max_compute);
-    printf("    Fastest Thread %d: %.6f s\n", fastest_thread, min_compute);
-    printf("    Imbalance: %.2f%% ((max-min)/max)\n", imbalance);
-#endif
-
-    return 0;
-}
-
-void *local_mandelbrot(void *argv) {
-    ThreadArg *t_arg = (ThreadArg *)argv;
-    const int iters = t_arg->iters;
-    const int width = t_arg->width;
-    const int height = t_arg->height;
-    const double left = t_arg->left;
-    const double right = t_arg->right;
-    const double lower = t_arg->lower;
-    const double upper = t_arg->upper;
-    const double x_scale = (right - left) / width;
-    const double y_scale = (upper - lower) / height;
-    int *image = t_arg->image;
-
-#ifdef PROFILING
-    double local_compute_time = 0.0;
-    double local_sync_time = 0.0;
-#endif
-
-    while (1) {
-#ifdef PROFILING
-        double sync_start = get_wall_time();
-#endif
-        pthread_mutex_lock(&task_mutex);
-        const int my_start_row = next_row;
-        next_row += CHUNK_SIZE;
-        pthread_mutex_unlock(&task_mutex);
-#ifdef PROFILING
-        local_sync_time += get_wall_time() - sync_start;
-#endif
-
-        if (my_start_row >= height) break;
-
-        const int my_end_row = (my_start_row + CHUNK_SIZE > height) ? height : my_start_row + CHUNK_SIZE;
-
-#ifdef PROFILING
-        double compute_start = get_wall_time();
-#endif
-        for (int j = my_start_row; j < my_end_row; ++j) {
+#pragma omp parallel num_threads(num_threads)
+    {
+#pragma omp for schedule(dynamic, 1) nowait
+        for (int j = my_start; j < my_start + my_count; ++j) {
             const double y0 = j * y_scale + lower;
 #pragma GCC ivdep
             for (int i = 0; i < width; ++i) {
@@ -277,20 +143,104 @@ void *local_mandelbrot(void *argv) {
                     y = 2 * x * y + y0;
                     x = x2 - y2 + x0;
                 }
-                image[j * width + i] = repeats;
+                image[(j - my_start) * width + i] = repeats;
             }
         }
-#ifdef PROFILING
-        local_compute_time += get_wall_time() - compute_start;
-#endif
     }
 
 #ifdef PROFILING
-    t_arg->compute_time = local_compute_time;
-    t_arg->sync_time = local_sync_time;
+    NVTX_POP(); // end Compute_Mandelbrot
 #endif
 
-    return NULL;
+    // ========================================================================
+    // Block 3: MPI Communication (Gatherv)
+    // ========================================================================
+#ifdef PROFILING
+    temp_start = MPI_Wtime();
+    NVTX_PUSH("Comm_Gatherv");
+#endif
+
+    if (my_rank == 0) {
+        int *recvcounts = (int *)malloc(numtasks * sizeof(int));
+        int *displacements = (int *)malloc(numtasks * sizeof(int));
+
+        for (int i = 0; i < numtasks; ++i) {
+            const int count = (i < remainder) ? base_chunk_size + 1 : base_chunk_size;
+            recvcounts[i] = width * count;
+            displacements[i] = (i * base_chunk_size + (i < remainder ? i : remainder)) * width;
+        }
+
+        MPI_Gatherv(image, width * my_count, MPI_INT, global_image, recvcounts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
+
+        free(recvcounts);
+        free(displacements);
+    } else {
+        MPI_Gatherv(image, width * my_count, MPI_INT, NULL, NULL, NULL, MPI_INT, 0, MPI_COMM_WORLD);
+    }
+
+#ifdef PROFILING
+    comm_time += MPI_Wtime() - temp_start;
+    NVTX_POP(); // end Comm_Gatherv
+#endif
+
+    // ========================================================================
+    // Block 4: Output I/O
+    // ========================================================================
+#ifdef PROFILING
+    temp_start = MPI_Wtime();
+    NVTX_PUSH("IO_Write");
+#endif
+
+    if (my_rank == 0) write_png(filename, iters, width, height, global_image);
+
+#ifdef PROFILING
+    io_time += MPI_Wtime() - temp_start;
+    NVTX_POP(); // end IO_Write
+#endif
+
+    free(global_image);
+    free(image);
+
+    // ========================================================================
+    // Block 5: Profiling Results Summary
+    // ========================================================================
+#ifdef PROFILING
+    MPI_Barrier(MPI_COMM_WORLD);
+    double total_time = MPI_Wtime() - total_start_time;
+    double cpu_time = total_time - io_time - comm_time;
+
+    // Aggregate statistics across all processes
+    double avg_io_time = 0.0, avg_comm_time = 0.0, avg_cpu_time = 0.0, avg_total_time = 0.0;
+    double max_total_time = 0.0, min_total_time = total_time;
+
+    MPI_Reduce(&io_time, &avg_io_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&comm_time, &avg_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&cpu_time, &avg_cpu_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &avg_total_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &min_total_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+
+    if (my_rank == 0 && numtasks > 0) {
+        avg_io_time /= numtasks;
+        avg_comm_time /= numtasks;
+        avg_cpu_time /= numtasks;
+        avg_total_time /= numtasks;
+
+        double proc_imbalance = (max_total_time > 0) ? (max_total_time - min_total_time) / max_total_time * 100 : 0.0;
+
+        printf("Procs=%d, OMP_Threads=%d, Avg Total Time: %.6f s\n", numtasks, num_threads, avg_total_time);
+        printf("  Avg IO Time: %.6f s (%.2f%%)\n", avg_io_time, (avg_io_time / avg_total_time) * 100);
+        printf("  Avg Comm Time: %.6f s (%.2f%%)\n", avg_comm_time, (avg_comm_time / avg_total_time) * 100);
+        printf("  Avg CPU Time: %.6f s (%.2f%%)\n", avg_cpu_time, (avg_cpu_time / avg_total_time) * 100);
+        printf("  Process Load Balance:\n");
+        printf("    Slowest Process: %.6f s\n", max_total_time);
+        printf("    Fastest Process: %.6f s\n", min_total_time);
+        printf("    Imbalance: %.2f%% ((max-min)/max)\n", proc_imbalance);
+    }
+#endif
+
+    MPI_Finalize();
+    return 0;
 }
 
 /**
