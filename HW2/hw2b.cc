@@ -12,17 +12,18 @@
 #endif
 #define PNG_NO_SETJMP
 
-#include <algorithm>
-#include <assert.h> // For assertions (assert)
-#include <cmath>
-#include <emmintrin.h> // SSE2
+#include <assert.h>     // For assertions (assert)
+#include <emmintrin.h>  // SSE2
 #include <mpi.h>
 #include <omp.h>
-#include <png.h>    // For the libpng library, used to write PNG files
-#include <sched.h>  // For CPU affinity functions (sched_getaffinity, CPU_COUNT)
-#include <stdio.h>  // For standard I/O (printf, fopen, etc.)
-#include <stdlib.h> // For general utilities (strtol, strtod, malloc, free)
-#include <string.h> // For memory manipulation (memset)
+#include <png.h>     // For the libpng library, used to write PNG files
+#include <sched.h>   // For CPU affinity functions (sched_getaffinity, CPU_COUNT)
+#include <stdio.h>   // For standard I/O (printf, fopen, etc.)
+#include <stdlib.h>  // For general utilities (strtol, strtod, malloc, free)
+#include <string.h>  // For memory manipulation (memset)
+
+#include <algorithm>
+#include <cmath>
 
 #ifdef PROFILING
 #include <nvtx3/nvToolsExt.h>
@@ -30,45 +31,45 @@
 // ============================================================================
 // NVTX Color Definitions for Performance Profiling
 // ============================================================================
-#define COLOR_IO 0xFF5C9FFF      // Azure Blue
-#define COLOR_COMPUTE 0xFF5FD068 // Spring Green (Computation)
-#define COLOR_COMM 0xFFFFA500    // Orange (Communication)
-#define COLOR_SETUP 0xFFFFBE3D   // Sunflower Yellow
-#define COLOR_DEFAULT 0xFFCBD5E0 // Soft Gray
+#define COLOR_IO 0xFF5C9FFF       // Azure Blue
+#define COLOR_COMPUTE 0xFF5FD068  // Spring Green (Computation)
+#define COLOR_COMM 0xFFFFA500     // Orange (Communication)
+#define COLOR_SETUP 0xFFFFBE3D    // Sunflower Yellow
+#define COLOR_DEFAULT 0xFFCBD5E0  // Soft Gray
 
 // ============================================================================
 // Smart NVTX Macro: Auto-selects color based on range name pattern
 // ============================================================================
-#define NVTX_PUSH(name)                                                                                                                                                                                \
-    do {                                                                                                                                                                                               \
-        uint32_t color = COLOR_DEFAULT;                                                                                                                                                                \
-        if (strstr(name, "IO_") != NULL) {                                                                                                                                                             \
-            color = COLOR_IO;                                                                                                                                                                          \
-        } else if (strstr(name, "Compute") != NULL) {                                                                                                                                                  \
-            color = COLOR_COMPUTE;                                                                                                                                                                     \
-        } else if (strstr(name, "Comm_") != NULL || strstr(name, "Gather") != NULL) {                                                                                                                  \
-            color = COLOR_COMM;                                                                                                                                                                        \
-        } else if (strcmp(name, "MPI_Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) {                                                                                                                 \
-            color = COLOR_SETUP;                                                                                                                                                                       \
-        } else {                                                                                                                                                                                       \
-            color = COLOR_DEFAULT;                                                                                                                                                                     \
-        }                                                                                                                                                                                              \
-        nvtxEventAttributes_t eventAttrib = {0};                                                                                                                                                       \
-        eventAttrib.version = NVTX_VERSION;                                                                                                                                                            \
-        eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                                                                                                                                              \
-        eventAttrib.colorType = NVTX_COLOR_ARGB;                                                                                                                                                       \
-        eventAttrib.color = color;                                                                                                                                                                     \
-        eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                                                                                                                                             \
-        eventAttrib.message.ascii = name;                                                                                                                                                              \
-        nvtxRangePushEx(&eventAttrib);                                                                                                                                                                 \
+#define NVTX_PUSH(name)                                                                \
+    do {                                                                               \
+        uint32_t color = COLOR_DEFAULT;                                                \
+        if (strstr(name, "IO_") != NULL) {                                             \
+            color = COLOR_IO;                                                          \
+        } else if (strstr(name, "Compute") != NULL) {                                  \
+            color = COLOR_COMPUTE;                                                     \
+        } else if (strstr(name, "Comm_") != NULL || strstr(name, "Gather") != NULL) {  \
+            color = COLOR_COMM;                                                        \
+        } else if (strcmp(name, "MPI_Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) { \
+            color = COLOR_SETUP;                                                       \
+        } else {                                                                       \
+            color = COLOR_DEFAULT;                                                     \
+        }                                                                              \
+        nvtxEventAttributes_t eventAttrib = {0};                                       \
+        eventAttrib.version = NVTX_VERSION;                                            \
+        eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                              \
+        eventAttrib.colorType = NVTX_COLOR_ARGB;                                       \
+        eventAttrib.color = color;                                                     \
+        eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                             \
+        eventAttrib.message.ascii = name;                                              \
+        nvtxRangePushEx(&eventAttrib);                                                 \
     } while (0)
 
 #define NVTX_POP() nvtxRangePop()
 #endif
 
-void write_png(const char *filename, int iters, int width, int height, const int *buffer);
+void write_png(const char* filename, int iters, int width, int height, const int* buffer);
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     // ========================================================================
     // Block 1: MPI Initialization
     // ========================================================================
@@ -76,7 +77,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     double total_start_time, temp_start, io_time = 0.0, comm_time = 0.0;
-    MPI_Barrier(MPI_COMM_WORLD); // Synchronize before starting the main timer
+    MPI_Barrier(MPI_COMM_WORLD);  // Synchronize before starting the main timer
     total_start_time = MPI_Wtime();
     NVTX_PUSH("MPI_Setup");
 #endif
@@ -88,12 +89,12 @@ int main(int argc, char *argv[]) {
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
-    const char *filename = argv[1];
+    const char* filename = argv[1];
     const int iters = strtol(argv[2], NULL, 10);
-    const double left = strtod(argv[3], NULL);  // Real part start (x0)
-    const double right = strtod(argv[4], NULL); // Real part end (x1)
-    const double lower = strtod(argv[5], NULL); // Imaginary part start (y0)
-    const double upper = strtod(argv[6], NULL); // Imaginary part end (y1)
+    const double left = strtod(argv[3], NULL);   // Real part start (x0)
+    const double right = strtod(argv[4], NULL);  // Real part end (x1)
+    const double lower = strtod(argv[5], NULL);  // Imaginary part start (y0)
+    const double upper = strtod(argv[6], NULL);  // Imaginary part end (y1)
     const int width = strtol(argv[7], NULL, 10);
     const int height = strtol(argv[8], NULL, 10);
 
@@ -105,19 +106,19 @@ int main(int argc, char *argv[]) {
     const int my_start = (my_rank * base_chunk_size + std::min(my_rank, remainder));
 
 #ifdef PROFILING
-    NVTX_POP(); // end MPI_Setup
+    NVTX_POP();  // end MPI_Setup
     NVTX_PUSH("Mem_Alloc");
 #endif
 
-    int *global_image = NULL;
-    int *image = (int *)malloc(width * my_count * sizeof(int));
-    if (my_rank == 0) global_image = (int *)malloc(width * height * sizeof(int));
+    int* global_image = NULL;
+    int* image = (int*)malloc(width * my_count * sizeof(int));
+    if (my_rank == 0) global_image = (int*)malloc(width * height * sizeof(int));
 
     const double x_scale = (right - left) / width;
     const double y_scale = (upper - lower) / height;
 
 #ifdef PROFILING
-    NVTX_POP(); // end Mem_Alloc
+    NVTX_POP();  // end Mem_Alloc
 #endif
 
     // ========================================================================
@@ -134,60 +135,46 @@ int main(int argc, char *argv[]) {
             const double y0 = j * y_scale + lower;
 #pragma GCC ivdep
             for (int i = 0; i < width - 1; i += 2) {
-
-                __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                // const double x0 = i * x_scale + left;
-                __m128d y0_vec = _mm_set1_pd(y0);
-
-                __m128d x_vec = _mm_setzero_pd(); // x = [0.0, 0.0]
-                __m128d y_vec = _mm_setzero_pd(); // y = [0.0, 0.0]
-                // double x = 0, y = 0;
                 int repeats[2] = {0, 0};
-                // int repeats = 0;
-                int active = 3;
 
-                __m128d four = _mm_set1_pd(4.0);
-                __m128d two = _mm_set1_pd(2.0);
+                __m128d x_vec = _mm_setzero_pd();  // x = [0.0, 0.0]
+                __m128d y_vec = _mm_setzero_pd();  // y = [0.0, 0.0]
 
-                for (int r = 0; r < iters && active; ++r) {
-                    __m128d x2 = _mm_mul_pd(x_vec, x_vec); // [x[0]^2, x[1]^2]
-                    // double x2 = x * x;
-                    __m128d y2 = _mm_mul_pd(y_vec, y_vec); // [y[0]^2, y[1]^2]
-                    // double y2 = y * y;
+                const __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+                const __m128d y0_vec = _mm_set1_pd(y0);
+                const __m128d four = _mm_set1_pd(4.0);
+
+                for (int r = 0; r < iters; ++r) {
+                    __m128d x2 = _mm_mul_pd(x_vec, x_vec);  // [x[0]^2, x[1]^2]
+                    __m128d y2 = _mm_mul_pd(y_vec, y_vec);  // [y[0]^2, y[1]^2]
                     __m128d len_sq = _mm_add_pd(x2, y2);
+                    __m128d cmp = _mm_cmplt_pd(len_sq, four);  // < 4.0 ?
 
-                    __m128d cmp = _mm_cmplt_pd(len_sq, four); // < 4.0 ?
-                    int mask = _mm_movemask_pd(cmp);
+                    const int mask = _mm_movemask_pd(cmp);
 
-                    if (mask & 1) repeats[0]++;
-                    if (mask & 2) repeats[1]++;
-                    active = mask;
-
-                    if (!active) break;
-                    // if (x2 + y2 >= 4) break;
+                    if (mask & 0b01) repeats[0]++;
+                    if (mask & 0b10) repeats[1]++;
+                    if (!mask) break;
 
                     __m128d xy = _mm_mul_pd(x_vec, y_vec);
                     __m128d temp_y = _mm_add_pd(_mm_add_pd(xy, xy), y0_vec);
-                    // y = xy + xy + y0;
                     __m128d temp_x = _mm_add_pd(_mm_sub_pd(x2, y2), x0_vec);
-                    // x = x2 - y2 + x0;
 
                     x_vec = temp_x;
                     y_vec = temp_y;
                 }
                 image[(j - my_start) * width + i] = repeats[0];
                 image[(j - my_start) * width + i + 1] = repeats[1];
-                // image[j * width + i] = repeats;
             }
 
-            if (width % 2 == 1) {
+            if (width % 2) {
                 const int i = width - 1;
                 const double x0 = i * x_scale + left;
-                double x = 0, y = 0, length_squared = 0;
+                double x = 0, y = 0;
                 int repeats = 0;
+
                 for (; repeats < iters; ++repeats) {
-                    double x2 = x * x;
-                    double y2 = y * y;
+                    const double x2 = x * x, y2 = y * y;
                     if (x2 + y2 >= 4) break;
                     y = 2 * x * y + y0;
                     x = x2 - y2 + x0;
@@ -198,7 +185,7 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef PROFILING
-    NVTX_POP(); // end Compute_Mandelbrot
+    NVTX_POP();  // end Compute_Mandelbrot
 #endif
 
     // ========================================================================
@@ -210,8 +197,8 @@ int main(int argc, char *argv[]) {
 #endif
 
     if (my_rank == 0) {
-        int *recvcounts = (int *)malloc(numtasks * sizeof(int));
-        int *displacements = (int *)malloc(numtasks * sizeof(int));
+        int* recvcounts = (int*)malloc(numtasks * sizeof(int));
+        int* displacements = (int*)malloc(numtasks * sizeof(int));
 
         for (int i = 0; i < numtasks; ++i) {
             const int count = (i < remainder) ? base_chunk_size + 1 : base_chunk_size;
@@ -229,7 +216,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     comm_time += MPI_Wtime() - temp_start;
-    NVTX_POP(); // end Comm_Gatherv
+    NVTX_POP();  // end Comm_Gatherv
 #endif
 
     // ========================================================================
@@ -244,7 +231,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     io_time += MPI_Wtime() - temp_start;
-    NVTX_POP(); // end IO_Write
+    NVTX_POP();  // end IO_Write
 #endif
 
     free(global_image);
@@ -303,9 +290,9 @@ int main(int argc, char *argv[]) {
  *               element stores the number of iterations for the corresponding
  *               pixel.
  */
-void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
+void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
     // Open the file for writing in binary mode.
-    FILE *fp = fopen(filename, "wb");
+    FILE* fp = fopen(filename, "wb");
     // assert(fp);  // Ensure the file was opened successfully.
 
     // Initialize the libpng structures for writing.
@@ -349,10 +336,10 @@ void write_png(const char *filename, int iters, int width, int height, const int
             // If the point escaped (p != iters), assign a color to it.
             if (p != iters) {
                 if (p & 16) {
-                    color[0] = 240;                      // Red component
-                    color[1] = color[2] = (p % 16) * 16; // Green and Blue components
+                    color[0] = 240;                       // Red component
+                    color[1] = color[2] = (p % 16) * 16;  // Green and Blue components
                 } else {
-                    color[0] = (p % 16) * 16; // Red component
+                    color[0] = (p % 16) * 16;  // Red component
                 }
             }
         }

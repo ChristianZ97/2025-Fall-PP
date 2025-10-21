@@ -12,14 +12,14 @@
 #endif
 #define PNG_NO_SETJMP
 
-#include <assert.h>    // For assertions (assert)
-#include <emmintrin.h> // SSE2
-#include <png.h>       // For the libpng library, used to write PNG files
+#include <assert.h>     // For assertions (assert)
+#include <emmintrin.h>  // SSE2
+#include <png.h>        // For the libpng library, used to write PNG files
 #include <pthread.h>
-#include <sched.h>  // For CPU affinity functions (sched_getaffinity, CPU_COUNT)
-#include <stdio.h>  // For standard I/O (printf, fopen, etc.)
-#include <stdlib.h> // For general utilities (strtol, strtod, malloc, free)
-#include <string.h> // For memory manipulation (memset)
+#include <sched.h>   // For CPU affinity functions (sched_getaffinity, CPU_COUNT)
+#include <stdio.h>   // For standard I/O (printf, fopen, etc.)
+#include <stdlib.h>  // For general utilities (strtol, strtod, malloc, free)
+#include <string.h>  // For memory manipulation (memset)
 
 #ifdef PROFILING
 #include <nvtx3/nvToolsExt.h>
@@ -28,37 +28,37 @@
 // ============================================================================
 // NVTX Color Definitions for Performance Profiling
 // ============================================================================
-#define COLOR_IO 0xFF5C9FFF      // Azure Blue
-#define COLOR_COMPUTE 0xFF5FD068 // Spring Green (Computation)
-#define COLOR_SYNC 0xFFFF6B81    // Rose Red (Synchronization)
-#define COLOR_SETUP 0xFFFFBE3D   // Sunflower Yellow
-#define COLOR_DEFAULT 0xFFCBD5E0 // Soft Gray
+#define COLOR_IO 0xFF5C9FFF       // Azure Blue
+#define COLOR_COMPUTE 0xFF5FD068  // Spring Green (Computation)
+#define COLOR_SYNC 0xFFFF6B81     // Rose Red (Synchronization)
+#define COLOR_SETUP 0xFFFFBE3D    // Sunflower Yellow
+#define COLOR_DEFAULT 0xFFCBD5E0  // Soft Gray
 
 // ============================================================================
 // Smart NVTX Macro: Auto-selects color based on range name pattern
 // ============================================================================
-#define NVTX_PUSH(name)                                                                                                                                                                                \
-    do {                                                                                                                                                                                               \
-        uint32_t color = COLOR_DEFAULT;                                                                                                                                                                \
-        if (strstr(name, "IO_") != NULL) {                                                                                                                                                             \
-            color = COLOR_IO;                                                                                                                                                                          \
-        } else if (strstr(name, "Compute") != NULL) {                                                                                                                                                  \
-            color = COLOR_COMPUTE;                                                                                                                                                                     \
-        } else if (strstr(name, "Sync") != NULL || strstr(name, "Join") != NULL) {                                                                                                                     \
-            color = COLOR_SYNC;                                                                                                                                                                        \
-        } else if (strcmp(name, "Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) {                                                                                                                     \
-            color = COLOR_SETUP;                                                                                                                                                                       \
-        } else {                                                                                                                                                                                       \
-            color = COLOR_DEFAULT;                                                                                                                                                                     \
-        }                                                                                                                                                                                              \
-        nvtxEventAttributes_t eventAttrib = {0};                                                                                                                                                       \
-        eventAttrib.version = NVTX_VERSION;                                                                                                                                                            \
-        eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                                                                                                                                              \
-        eventAttrib.colorType = NVTX_COLOR_ARGB;                                                                                                                                                       \
-        eventAttrib.color = color;                                                                                                                                                                     \
-        eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                                                                                                                                             \
-        eventAttrib.message.ascii = name;                                                                                                                                                              \
-        nvtxRangePushEx(&eventAttrib);                                                                                                                                                                 \
+#define NVTX_PUSH(name)                                                            \
+    do {                                                                           \
+        uint32_t color = COLOR_DEFAULT;                                            \
+        if (strstr(name, "IO_") != NULL) {                                         \
+            color = COLOR_IO;                                                      \
+        } else if (strstr(name, "Compute") != NULL) {                              \
+            color = COLOR_COMPUTE;                                                 \
+        } else if (strstr(name, "Sync") != NULL || strstr(name, "Join") != NULL) { \
+            color = COLOR_SYNC;                                                    \
+        } else if (strcmp(name, "Setup") == 0 || strcmp(name, "Mem_Alloc") == 0) { \
+            color = COLOR_SETUP;                                                   \
+        } else {                                                                   \
+            color = COLOR_DEFAULT;                                                 \
+        }                                                                          \
+        nvtxEventAttributes_t eventAttrib = {0};                                   \
+        eventAttrib.version = NVTX_VERSION;                                        \
+        eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                          \
+        eventAttrib.colorType = NVTX_COLOR_ARGB;                                   \
+        eventAttrib.color = color;                                                 \
+        eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                         \
+        eventAttrib.message.ascii = name;                                          \
+        nvtxRangePushEx(&eventAttrib);                                             \
     } while (0)
 
 #define NVTX_POP() nvtxRangePop()
@@ -78,25 +78,25 @@ int next_row = 0;
 
 typedef struct {
     int iters;
-    int width; // fix, since we divide by y
+    int width;  // fix, since we divide by y
     int height;
     int my_height_start;
     int my_height_end;
-    int *image;
-    double left;  // Real part start (x0)
-    double right; // Real part end (x1)
-    double lower; // Imaginary part start (y0)
-    double upper; // Imaginary part end (y1)
+    int* image;
+    double left;   // Real part start (x0)
+    double right;  // Real part end (x1)
+    double lower;  // Imaginary part start (y0)
+    double upper;  // Imaginary part end (y1)
 #ifdef PROFILING
     double compute_time;
     double sync_time;
 #endif
 } ThreadArg;
 
-void write_png(const char *filename, int iters, int width, int height, const int *buffer);
-void *local_mandelbrot(void *argv);
+void write_png(const char* filename, int iters, int width, int height, const int* buffer);
+void* local_mandelbrot(void* argv);
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 #ifdef PROFILING
     double total_start_time, temp_start, io_time = 0.0;
     total_start_time = get_wall_time();
@@ -109,27 +109,27 @@ int main(int argc, char *argv[]) {
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
-    const char *filename = argv[1];
+    const char* filename = argv[1];
     const int iters = strtol(argv[2], NULL, 10);
-    const double left = strtod(argv[3], NULL);  // Real part start (x0)
-    const double right = strtod(argv[4], NULL); // Real part end (x1)
-    const double lower = strtod(argv[5], NULL); // Imaginary part start (y0)
-    const double upper = strtod(argv[6], NULL); // Imaginary part end (y1)
+    const double left = strtod(argv[3], NULL);   // Real part start (x0)
+    const double right = strtod(argv[4], NULL);  // Real part end (x1)
+    const double lower = strtod(argv[5], NULL);  // Imaginary part start (y0)
+    const double upper = strtod(argv[6], NULL);  // Imaginary part end (y1)
     const int width = strtol(argv[7], NULL, 10);
     const int height = strtol(argv[8], NULL, 10);
 
 #ifdef PROFILING
-    NVTX_POP(); // end Setup
+    NVTX_POP();  // end Setup
     NVTX_PUSH("Mem_Alloc");
 #endif
 
-    int *image = (int *)malloc(width * height * sizeof(int));
+    int* image = (int*)malloc(width * height * sizeof(int));
     int num_threads = CPU_COUNT(&cpu_set);
     pthread_t threads[num_threads];
     ThreadArg t_args[num_threads];
 
 #ifdef PROFILING
-    NVTX_POP(); // end Mem_Alloc
+    NVTX_POP();  // end Mem_Alloc
 #endif
 
     // ========================================================================
@@ -152,18 +152,19 @@ int main(int argc, char *argv[]) {
         t_args[i].compute_time = 0.0;
         t_args[i].sync_time = 0.0;
 #endif
-        pthread_create(&threads[i], NULL, local_mandelbrot, (void *)&t_args[i]);
+        pthread_create(&threads[i], NULL, local_mandelbrot, (void*)&t_args[i]);
     }
 
 #ifdef PROFILING
     NVTX_PUSH("Thread_Join");
 #endif
 
-    for (int i = 0; i < num_threads; i++) pthread_join(threads[i], NULL);
+    for (int i = 0; i < num_threads; i++)
+        pthread_join(threads[i], NULL);
 
 #ifdef PROFILING
-    NVTX_POP(); // end Thread_Join
-    NVTX_POP(); // end Compute_Main
+    NVTX_POP();  // end Thread_Join
+    NVTX_POP();  // end Compute_Main
 #endif
 
     // ========================================================================
@@ -178,7 +179,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     io_time += get_wall_time() - temp_start;
-    NVTX_POP(); // end IO_Write
+    NVTX_POP();  // end IO_Write
 #endif
 
     free(image);
@@ -227,8 +228,8 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void *local_mandelbrot(void *argv) {
-    ThreadArg *t_arg = (ThreadArg *)argv;
+void* local_mandelbrot(void* argv) {
+    ThreadArg* t_arg = (ThreadArg*)argv;
     const int iters = t_arg->iters;
     const int width = t_arg->width;
     const int height = t_arg->height;
@@ -238,7 +239,7 @@ void *local_mandelbrot(void *argv) {
     const double upper = t_arg->upper;
     const double x_scale = (right - left) / width;
     const double y_scale = (upper - lower) / height;
-    int *image = t_arg->image;
+    int* image = t_arg->image;
 
 #ifdef PROFILING
     double local_compute_time = 0.0;
@@ -268,65 +269,51 @@ void *local_mandelbrot(void *argv) {
             const double y0 = j * y_scale + lower;
 #pragma GCC ivdep
             for (int i = 0; i < width - 1; i += 2) {
-
-                __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                // const double x0 = i * x_scale + left;
-                __m128d y0_vec = _mm_set1_pd(y0);
-
-                __m128d x_vec = _mm_setzero_pd(); // x = [0.0, 0.0]
-                __m128d y_vec = _mm_setzero_pd(); // y = [0.0, 0.0]
-                // double x = 0, y = 0;
                 int repeats[2] = {0, 0};
-                // int repeats = 0;
-                int active = 3;
 
-                __m128d four = _mm_set1_pd(4.0);
-                __m128d two = _mm_set1_pd(2.0);
+                __m128d x_vec = _mm_setzero_pd();  // x = [0.0, 0.0]
+                __m128d y_vec = _mm_setzero_pd();  // y = [0.0, 0.0]
 
-                for (int r = 0; r < iters && active; ++r) {
-                    __m128d x2 = _mm_mul_pd(x_vec, x_vec); // [x[0]^2, x[1]^2]
-                    // double x2 = x * x;
-                    __m128d y2 = _mm_mul_pd(y_vec, y_vec); // [y[0]^2, y[1]^2]
-                    // double y2 = y * y;
+                const __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+                const __m128d y0_vec = _mm_set1_pd(y0);
+                const __m128d four = _mm_set1_pd(4.0);
+
+                for (int r = 0; r < iters; ++r) {
+                    __m128d x2 = _mm_mul_pd(x_vec, x_vec);  // [x[0]^2, x[1]^2]
+                    __m128d y2 = _mm_mul_pd(y_vec, y_vec);  // [y[0]^2, y[1]^2]
                     __m128d len_sq = _mm_add_pd(x2, y2);
+                    __m128d cmp = _mm_cmplt_pd(len_sq, four);  // < 4.0 ?
 
-                    __m128d cmp = _mm_cmplt_pd(len_sq, four); // < 4.0 ?
-                    int mask = _mm_movemask_pd(cmp);
+                    const int mask = _mm_movemask_pd(cmp);
 
-                    if (mask & 1) repeats[0]++;
-                    if (mask & 2) repeats[1]++;
-                    active = mask;
-
-                    if (!active) break;
-                    // if (x2 + y2 >= 4) break;
+                    if (mask & 0b01) repeats[0]++;
+                    if (mask & 0b10) repeats[1]++;
+                    if (!mask) break;
 
                     __m128d xy = _mm_mul_pd(x_vec, y_vec);
                     __m128d temp_y = _mm_add_pd(_mm_add_pd(xy, xy), y0_vec);
-                    // y = xy + xy + y0;
                     __m128d temp_x = _mm_add_pd(_mm_sub_pd(x2, y2), x0_vec);
-                    // x = x2 - y2 + x0;
 
                     x_vec = temp_x;
                     y_vec = temp_y;
                 }
                 image[j * width + i] = repeats[0];
                 image[j * width + i + 1] = repeats[1];
-                // image[j * width + i] = repeats;
             }
 
-            if (width % 2 == 1) {
+            if (width % 2) {
                 const int i = width - 1;
                 const double x0 = i * x_scale + left;
-                double x = 0, y = 0, length_squared = 0;
+                double x = 0, y = 0;
                 int repeats = 0;
+
                 for (; repeats < iters; ++repeats) {
-                    double x2 = x * x;
-                    double y2 = y * y;
+                    const double x2 = x * x, y2 = y * y;
                     if (x2 + y2 >= 4) break;
                     y = 2 * x * y + y0;
                     x = x2 - y2 + x0;
                 }
-                image[j * width + i] = repeats;
+                image[(j + 1) * width - 1] = repeats;
             }
         }
 #ifdef PROFILING
@@ -353,9 +340,9 @@ void *local_mandelbrot(void *argv) {
  *               element stores the number of iterations for the corresponding
  *               pixel.
  */
-void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
+void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
     // Open the file for writing in binary mode.
-    FILE *fp = fopen(filename, "wb");
+    FILE* fp = fopen(filename, "wb");
     // assert(fp);  // Ensure the file was opened successfully.
 
     // Initialize the libpng structures for writing.
@@ -376,10 +363,12 @@ void write_png(const char *filename, int iters, int width, int height, const int
     // Write the info chunk to the file.
     png_write_info(png_ptr, info_ptr);
 
-    // Set the compression level (1 is a good balance between speed and size).
+    // Set the compression level (1 is a good balance between speed and
+    // size).
     png_set_compression_level(png_ptr, 1);
 
-    // Allocate a buffer for a single row of the image. Each pixel is 3 bytes (R, G, B).
+    // Allocate a buffer for a single row of the image. Each pixel is 3
+    // bytes (R, G, B).
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
 
@@ -393,16 +382,18 @@ void write_png(const char *filename, int iters, int width, int height, const int
             // Get the iteration count for the current pixel.
             int p = buffer[(height - 1 - y) * width + x];
 
-            // Get a pointer to the start of the color data for this pixel.
+            // Get a pointer to the start of the color data for this
+            // pixel.
             png_bytep color = row + x * 3;
 
-            // If the point escaped (p != iters), assign a color to it.
+            // If the point escaped (p != iters), assign a color to
+            // it.
             if (p != iters) {
                 if (p & 16) {
-                    color[0] = 240;                      // Red component
-                    color[1] = color[2] = (p % 16) * 16; // Green and Blue components
+                    color[0] = 240;                       // Red component
+                    color[1] = color[2] = (p % 16) * 16;  // Green and Blue components
                 } else {
-                    color[0] = (p % 16) * 16; // Red component
+                    color[0] = (p % 16) * 16;  // Red component
                 }
             }
         }
