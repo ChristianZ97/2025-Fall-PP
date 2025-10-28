@@ -27,12 +27,12 @@ all: $(ALL_TARGETS)
 # Pattern rule for hw2a_* (pthread version)
 hw2a_%: hw2a_%.cc
 	@echo "Compiling $< -> $@"
-	$(CXX) $(BASE_CXXFLAGS) -pthread $< -o $@ $(LDLIBS)
+	$(CXX) $(PROF_CXXFLAGS) -pthread $< -o $@ $(LDLIBS)
 
 # Pattern rule for hw2b_* (MPI+OpenMP version)
 hw2b_%: hw2b_%.cc
 	@echo "Compiling $< -> $@"
-	$(MPICXX) $(BASE_CXXFLAGS) -fopenmp $< -o $@ $(LDLIBS)
+	$(MPICXX) $(PROF_CXXFLAGS) -fopenmp $< -o $@ $(LDLIBS)
 
 # Clean all compiled binaries
 .PHONY: clean
