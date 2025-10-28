@@ -274,10 +274,10 @@ void *local_mandelbrot(void *argv) {
             const __m128d y0_vec = _mm_set1_pd(y0);
 
             for (int i = 0; i <= width - 8; i += 8) {
-                __m128d repeats_vec_0 = _mm_setzero_pd();  // [repeats[0], repeats[1]]
-                __m128d repeats_vec_1 = _mm_setzero_pd();  // [repeats[2], repeats[3]]
-                __m128d repeats_vec_2 = _mm_setzero_pd();  // [repeats[4], repeats[5]]
-                __m128d repeats_vec_3 = _mm_setzero_pd();  // [repeats[6], repeats[7]]
+                __m128d repeats_vec_0 = _mm_setzero_pd();
+                __m128d repeats_vec_1 = _mm_setzero_pd();
+                __m128d repeats_vec_2 = _mm_setzero_pd();
+                __m128d repeats_vec_3 = _mm_setzero_pd();
 
                 __m128d x_vec_0 = _mm_setzero_pd();
                 __m128d y_vec_0 = _mm_setzero_pd();

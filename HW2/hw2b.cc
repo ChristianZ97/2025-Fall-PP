@@ -128,77 +128,80 @@ int main(int argc, char *argv[]) {
     NVTX_PUSH("Compute_Mandelbrot");
 #endif
 
-#pragma omp parallel num_threads(num_threads)
-    {
-        const __m128d four = _mm_set1_pd(4.0);
+    const __m128d four = _mm_set1_pd(4.0);
+    const __m128d one = _mm_set1_pd(1.0);
+#pragma omp parallel num_threads(num_threads) 
+{
 #pragma omp for schedule(dynamic, 1) nowait
-        for (int j = my_start; j < my_start + my_count; ++j) {
-            const double y0 = j * y_scale + lower;
-            const __m128d y0_vec = _mm_set1_pd(y0);
+    for (int local_j = 0; local_j < my_count; ++local_j) {
+        const int j = my_rank + local_j * numtasks;
+        const double y0 = j * y_scale + lower;
+        const __m128d y0_vec = _mm_set1_pd(y0);
 
-            for (int i = 0; i <= width - 4; i += 4) {
-                int repeats[4] = {0, 0, 0, 0};
+        for (int i = 0; i <= width - 4; i += 4) {
+            __m128d repeats_vec_0 = _mm_setzero_pd();  // [repeats[0], repeats[1]]
+            __m128d repeats_vec_1 = _mm_setzero_pd();  // [repeats[2], repeats[3]]
 
-                __m128d x_vec_0 = _mm_setzero_pd();  // x = [0.0, 0.0]
-                __m128d y_vec_0 = _mm_setzero_pd();  // y = [0.0, 0.0]
+            __m128d x_vec_0 = _mm_setzero_pd();  // x = [0.0, 0.0]
+            __m128d y_vec_0 = _mm_setzero_pd();  // y = [0.0, 0.0]
 
-                __m128d x_vec_1 = _mm_setzero_pd();  // x = [0.0, 0.0]
-                __m128d y_vec_1 = _mm_setzero_pd();  // y = [0.0, 0.0]
+            __m128d x_vec_1 = _mm_setzero_pd();  // x = [0.0, 0.0]
+            __m128d y_vec_1 = _mm_setzero_pd();  // y = [0.0, 0.0]
 
-                const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
+            const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+            const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
 
-                for (int r = 0; r < iters; ++r) {
-                    __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);  // [x[0]^2, x[1]^2]
-                    __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);  // [y[0]^2, y[1]^2]
+            for (int r = 0; r < iters; ++r) {
+                __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);  // [x[0]^2, x[1]^2]
+                __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);  // [y[0]^2, y[1]^2]
 
-                    __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);  // [x[0]^2, x[1]^2]
-                    __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);  // [y[0]^2, y[1]^2]
+                __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);  // [x[0]^2, x[1]^2]
+                __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);  // [y[0]^2, y[1]^2]
 
-                    __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
-                    __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);  // < 4.0 ?
+                __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
+                __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);  // < 4.0 ?
 
-                    __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
-                    __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);  // < 4.0 ?
+                __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
+                __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);  // < 4.0 ?
 
-                    const int mask_0 = _mm_movemask_pd(cmp_0);
-                    const int mask_1 = _mm_movemask_pd(cmp_1);
+                repeats_vec_0 = _mm_add_pd(repeats_vec_0, _mm_and_pd(cmp_0, one));
+                repeats_vec_1 = _mm_add_pd(repeats_vec_1, _mm_and_pd(cmp_1, one));
 
-                    if (mask_0 & 0b01) repeats[0]++;
-                    if (mask_0 & 0b10) repeats[1]++;
-                    if (mask_1 & 0b01) repeats[2]++;
-                    if (mask_1 & 0b10) repeats[3]++;
-                    if (!mask_0 && !mask_1) break;
+                const int mask_0 = _mm_movemask_pd(cmp_0);
+                const int mask_1 = _mm_movemask_pd(cmp_1);
+                if (!mask_0 && !mask_1) break;
 
-                    __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
-                    y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
-                    x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
+                __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
+                y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
+                x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
 
-                    __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
-                    y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
-                    x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
-                }
-
-                image[(j - my_start) * width + i] = repeats[0];
-                image[(j - my_start) * width + i + 1] = repeats[1];
-                image[(j - my_start) * width + i + 2] = repeats[2];
-                image[(j - my_start) * width + i + 3] = repeats[3];
+                __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
+                y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
+                x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
             }
 
-            for (int i = (width / 4) * 4; i < width; ++i) {
-                const double x0 = i * x_scale + left;
-                double x = 0, y = 0;
-                int repeats = 0;
-                for (; repeats < iters; ++repeats) {
-                    const double x2 = x * x, y2 = y * y;
-                    if (x2 + y2 >= 4) break;
-                    y = 2 * x * y + y0;
-                    x = x2 - y2 + x0;
-                }
-                image[(j - my_start) * width + i] = repeats;
-            }
+            __m128i int_vec_0 = _mm_cvtpd_epi32(repeats_vec_0);  // [int(r0), int(r1), 0, 0]
+            __m128i int_vec_1 = _mm_cvtpd_epi32(repeats_vec_1);  // [int(r2), int(r3), 0, 0]
+
+            int *image_ptr = &image[local_j * width + i];
+            _mm_storel_epi64((__m128i *)image_ptr, int_vec_0);
+            _mm_storel_epi64((__m128i *)(image_ptr + 2), int_vec_1);
         }
-    }  // end of #pragma omp parallel
+
+        for (int i = (width / 4) * 4; i < width; ++i) {
+            const double x0 = i * x_scale + left;
+            double x = 0, y = 0;
+            int repeats = 0;
+            for (; repeats < iters; ++repeats) {
+                const double x2 = x * x, y2 = y * y;
+                if (x2 + y2 >= 4) break;
+                y = 2 * x * y + y0;
+                x = x2 - y2 + x0;
+            }
+            image[local_j * width + i] = repeats;
+        }
+    }
+}  // end of #pragma omp parallel
 
 #ifdef PROFILING
     NVTX_POP();  // end Compute_Mandelbrot
@@ -216,14 +219,26 @@ int main(int argc, char *argv[]) {
         int *recvcounts = (int *)malloc(numtasks * sizeof(int));
         int *displacements = (int *)malloc(numtasks * sizeof(int));
 
-        for (int i = 0; i < numtasks; ++i) {
-            const int count = (i < remainder) ? base_chunk_size + 1 : base_chunk_size;
-            recvcounts[i] = width * count;
-            displacements[i] = (i * base_chunk_size + (i < remainder ? i : remainder)) * width;
+        for (int rank = 0; rank < numtasks; ++rank) {
+            const int count = (rank < remainder) ? (base_chunk_size + 1) : base_chunk_size;
+            recvcounts[rank] = width * count;
+            displacements[rank] = rank * width * base_chunk_size + std::min(rank, remainder) * width;
         }
 
-        MPI_Gatherv(image, width * my_count, MPI_INT, global_image, recvcounts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
+        int *temp_image = (int *)malloc(width * height * sizeof(int));
+        MPI_Gatherv(image, width * my_count, MPI_INT, temp_image, recvcounts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
 
+        for (int rank = 0; rank < numtasks; ++rank) {
+            const int count = (rank < remainder) ? (base_chunk_size + 1) : base_chunk_size;
+            const int offset = displacements[rank];
+
+            for (int local_j = 0; local_j < count; ++local_j) {
+                const int global_row = rank + local_j * numtasks;
+                memcpy(&global_image[global_row * width], &temp_image[offset + local_j * width], width * sizeof(int));
+            }
+        }
+
+        free(temp_image);
         free(recvcounts);
         free(displacements);
     } else {
