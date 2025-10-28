@@ -1,0 +1,19 @@
+==========================================
+  MPI Processes:       3
+  OpenMP Threads:      4
+  Total Time:          89.6693 s
+  Compute:             87.2319 s  (97.3%)
+  Communication:       1.4537 s  (1.6%)
+  IO:                  0.9837 s  (1.1%)
+
+  Parallel Efficiency: 97.28%
+  Comm Overhead:       1.67% (comm/compute)
+  IO Overhead:         1.13% (io/compute)
+
+  Max Process:         89.6694 s
+  Min Process:         89.6692 s
+  Process Imbalance:   0.00%
+  Max Thread:          89.6431 s
+  Min Thread:          83.8173 s
+  Thread Imbalance:    6.50%
+==========================================

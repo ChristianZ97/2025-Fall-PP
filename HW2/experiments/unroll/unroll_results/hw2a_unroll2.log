@@ -1,0 +1,14 @@
+==========================================
+  Pthreads:            12
+  Total Time:          49.8061 s
+  Compute:             46.4174 s  (93.2%)
+  Communication:       0.0001 s  (0.0%)
+  IO:                  3.3373 s  (6.7%)
+
+  Parallel Efficiency: 93.20%
+  Comm Overhead:       0.00% (sync/compute)
+
+  Max Thread (T2):    46.4679 s
+  Min Thread (T3):    46.3626 s
+  Thread Imbalance:    0.23% ((max-min)/max)
+==========================================
