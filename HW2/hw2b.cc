@@ -67,9 +67,9 @@
 #define NVTX_POP() nvtxRangePop()
 #endif
 
-void write_png(const char* filename, int iters, int width, int height, const int* buffer);
+void write_png(const char *filename, int iters, int width, int height, const int *buffer);
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     // ========================================================================
     // Block 1: MPI Initialization
     // ========================================================================
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
-    const char* filename = argv[1];
+    const char *filename = argv[1];
     const int iters = strtol(argv[2], NULL, 10);
     const double left = strtod(argv[3], NULL);   // Real part start (x0)
     const double right = strtod(argv[4], NULL);  // Real part end (x1)
@@ -110,9 +110,9 @@ int main(int argc, char* argv[]) {
     NVTX_PUSH("Mem_Alloc");
 #endif
 
-    int* global_image = NULL;
-    int* image = (int*)malloc(width * my_count * sizeof(int));
-    if (my_rank == 0) global_image = (int*)malloc(width * height * sizeof(int));
+    int *global_image = NULL;
+    int *image = (int *)malloc(width * my_count * sizeof(int));
+    if (my_rank == 0) global_image = (int *)malloc(width * height * sizeof(int));
 
     const double x_scale = (right - left) / width;
     const double y_scale = (upper - lower) / height;
@@ -130,49 +130,65 @@ int main(int argc, char* argv[]) {
 
 #pragma omp parallel num_threads(num_threads)
     {
+        const __m128d four = _mm_set1_pd(4.0);
 #pragma omp for schedule(dynamic, 1) nowait
         for (int j = my_start; j < my_start + my_count; ++j) {
             const double y0 = j * y_scale + lower;
-#pragma GCC ivdep
-            for (int i = 0; i < width - 1; i += 2) {
-                int repeats[2] = {0, 0};
+            const __m128d y0_vec = _mm_set1_pd(y0);
 
-                __m128d x_vec = _mm_setzero_pd();  // x = [0.0, 0.0]
-                __m128d y_vec = _mm_setzero_pd();  // y = [0.0, 0.0]
+            for (int i = 0; i <= width - 4; i += 4) {
+                int repeats[4] = {0, 0, 0, 0};
 
-                const __m128d x0_vec = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                const __m128d y0_vec = _mm_set1_pd(y0);
-                const __m128d four = _mm_set1_pd(4.0);
+                __m128d x_vec_0 = _mm_setzero_pd();  // x = [0.0, 0.0]
+                __m128d y_vec_0 = _mm_setzero_pd();  // y = [0.0, 0.0]
+
+                __m128d x_vec_1 = _mm_setzero_pd();  // x = [0.0, 0.0]
+                __m128d y_vec_1 = _mm_setzero_pd();  // y = [0.0, 0.0]
+
+                const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+                const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
 
                 for (int r = 0; r < iters; ++r) {
-                    __m128d x2 = _mm_mul_pd(x_vec, x_vec);  // [x[0]^2, x[1]^2]
-                    __m128d y2 = _mm_mul_pd(y_vec, y_vec);  // [y[0]^2, y[1]^2]
-                    __m128d len_sq = _mm_add_pd(x2, y2);
-                    __m128d cmp = _mm_cmplt_pd(len_sq, four);  // < 4.0 ?
+                    __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);  // [x[0]^2, x[1]^2]
+                    __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);  // [y[0]^2, y[1]^2]
 
-                    const int mask = _mm_movemask_pd(cmp);
+                    __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);  // [x[0]^2, x[1]^2]
+                    __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);  // [y[0]^2, y[1]^2]
 
-                    if (mask & 0b01) repeats[0]++;
-                    if (mask & 0b10) repeats[1]++;
-                    if (!mask) break;
+                    __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
+                    __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);  // < 4.0 ?
 
-                    __m128d xy = _mm_mul_pd(x_vec, y_vec);
-                    __m128d temp_y = _mm_add_pd(_mm_add_pd(xy, xy), y0_vec);
-                    __m128d temp_x = _mm_add_pd(_mm_sub_pd(x2, y2), x0_vec);
+                    __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
+                    __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);  // < 4.0 ?
 
-                    x_vec = temp_x;
-                    y_vec = temp_y;
+                    const int mask_0 = _mm_movemask_pd(cmp_0);
+                    const int mask_1 = _mm_movemask_pd(cmp_1);
+
+                    if (mask_0 & 0b01) repeats[0]++;
+                    if (mask_0 & 0b10) repeats[1]++;
+                    if (mask_1 & 0b01) repeats[2]++;
+                    if (mask_1 & 0b10) repeats[3]++;
+                    if (!mask_0 && !mask_1) break;
+
+                    __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
+                    y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
+                    x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
+
+                    __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
+                    y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
+                    x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
                 }
+
                 image[(j - my_start) * width + i] = repeats[0];
                 image[(j - my_start) * width + i + 1] = repeats[1];
+                image[(j - my_start) * width + i + 2] = repeats[2];
+                image[(j - my_start) * width + i + 3] = repeats[3];
             }
 
-            if (width % 2) {
-                const int i = width - 1;
+            for (int i = (width / 4) * 4; i < width; ++i) {
                 const double x0 = i * x_scale + left;
                 double x = 0, y = 0;
                 int repeats = 0;
-
                 for (; repeats < iters; ++repeats) {
                     const double x2 = x * x, y2 = y * y;
                     if (x2 + y2 >= 4) break;
@@ -182,7 +198,7 @@ int main(int argc, char* argv[]) {
                 image[(j - my_start) * width + i] = repeats;
             }
         }
-    }
+    }  // end of #pragma omp parallel
 
 #ifdef PROFILING
     NVTX_POP();  // end Compute_Mandelbrot
@@ -197,8 +213,8 @@ int main(int argc, char* argv[]) {
 #endif
 
     if (my_rank == 0) {
-        int* recvcounts = (int*)malloc(numtasks * sizeof(int));
-        int* displacements = (int*)malloc(numtasks * sizeof(int));
+        int *recvcounts = (int *)malloc(numtasks * sizeof(int));
+        int *displacements = (int *)malloc(numtasks * sizeof(int));
 
         for (int i = 0; i < numtasks; ++i) {
             const int count = (i < remainder) ? base_chunk_size + 1 : base_chunk_size;
@@ -290,9 +306,9 @@ int main(int argc, char* argv[]) {
  *               element stores the number of iterations for the corresponding
  *               pixel.
  */
-void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
+void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
     // Open the file for writing in binary mode.
-    FILE* fp = fopen(filename, "wb");
+    FILE *fp = fopen(filename, "wb");
     // assert(fp);  // Ensure the file was opened successfully.
 
     // Initialize the libpng structures for writing.
