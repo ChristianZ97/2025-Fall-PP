@@ -303,38 +303,69 @@ int main(int argc, char *argv[]) {
 #ifdef PROFILING
     MPI_Barrier(MPI_COMM_WORLD);
     double total_time = MPI_Wtime() - total_start_time;
-    double cpu_time = total_time - io_time - comm_time;
+    double compute_time = total_time - io_time - comm_time;
 
     // Aggregate statistics across all processes
-    double avg_io_time = 0.0, avg_comm_time = 0.0, avg_cpu_time = 0.0, avg_total_time = 0.0;
-    double max_total_time = 0.0, min_total_time = total_time;
+    double avg_total = 0.0, avg_compute = 0.0, avg_comm = 0.0, avg_io = 0.0;
+    double max_total = 0.0, min_total = total_time;
+    double max_compute = 0.0, min_compute = compute_time;
 
-    MPI_Reduce(&io_time, &avg_io_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&comm_time, &avg_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&cpu_time, &avg_cpu_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&total_time, &avg_total_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&total_time, &min_total_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &avg_total, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&compute_time, &avg_compute, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&comm_time, &avg_comm, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&io_time, &avg_io, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &max_total, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total_time, &min_total, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&compute_time, &max_compute, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&compute_time, &min_compute, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
 
     if (my_rank == 0 && numtasks > 0) {
-        avg_io_time /= numtasks;
-        avg_comm_time /= numtasks;
-        avg_cpu_time /= numtasks;
-        avg_total_time /= numtasks;
+        avg_total /= numtasks;
+        avg_compute /= numtasks;
+        avg_comm /= numtasks;
+        avg_io /= numtasks;
 
-        double proc_imbalance = (max_total_time > 0) ? (max_total_time - min_total_time) / max_total_time * 100 : 0.0;
+        double total_imbalance = (max_total > 0) ? (max_total - min_total) / max_total * 100 : 0.0;
+        double compute_imbalance = (max_compute > 0) ? (max_compute - min_compute) / max_compute * 100 : 0.0;
+        double parallel_efficiency = (avg_compute / avg_total) * 100;
+        double comm_overhead = (avg_comm / avg_compute) * 100;
+        double io_overhead = (avg_io / avg_compute) * 100;
+        int total_cores = numtasks * num_threads;
 
-        printf("Procs=%d, OMP_Threads=%d, Avg Total Time: %.6f s\n", numtasks, num_threads, avg_total_time);
-        printf("  Avg IO Time: %.6f s (%.2f%%)\n", avg_io_time, (avg_io_time / avg_total_time) * 100);
-        printf("  Avg Comm Time: %.6f s (%.2f%%)\n", avg_comm_time, (avg_comm_time / avg_total_time) * 100);
-        printf("  Avg CPU Time: %.6f s (%.2f%%)\n", avg_cpu_time, (avg_cpu_time / avg_total_time) * 100);
-        printf("  Process Load Balance:\n");
-        printf("    Slowest Process: %.6f s\n", max_total_time);
-        printf("    Fastest Process: %.6f s\n", min_total_time);
-        printf("    Imbalance: %.2f%% ((max-min)/max)\n", proc_imbalance);
+        // === Report-friendly output ===
+        printf("==========================================\n");
+        printf("HW2B Performance Report\n");
+        printf("==========================================\n");
+        printf("Configuration:\n");
+        printf("  MPI Processes:       %d\n", numtasks);
+        printf("  OpenMP Threads/Proc: %d\n", num_threads);
+        printf("  Total Cores:         %d\n", total_cores);
+        printf("  Parallelization:     MPI+OpenMP dynamic-1\n");
+        printf("  SIMD:                SSE2 Unroll-4\n\n");
+        
+        printf("Timing Breakdown (Average):\n");
+        printf("  Total Time:          %.4f s\n", avg_total);
+        printf("  Compute:             %.4f s  (%.1f%%)\n", avg_compute, (avg_compute/avg_total)*100);
+        printf("  Communication:       %.4f s  (%.1f%%)\n", avg_comm, (avg_comm/avg_total)*100);
+        printf("  IO:                  %.4f s  (%.1f%%)\n\n", avg_io, (avg_io/avg_total)*100);
+        
+        printf("Performance Metrics:\n");
+        printf("  Parallel Efficiency: %.2f%%\n", parallel_efficiency);
+        printf("  Comm Overhead:       %.2f%% (comm/compute)\n", comm_overhead);
+        printf("  IO Overhead:         %.2f%% (io/compute)\n\n", io_overhead);
+        
+        printf("Load Balance:\n");
+        printf("  Process Level:\n");
+        printf("    Max Total Time:    %.4f s\n", max_total);
+        printf("    Min Total Time:    %.4f s\n", min_total);
+        printf("    Total Imbalance:   %.2f%%\n", total_imbalance);
+        printf("  Compute Level:\n");
+        printf("    Max Compute Time:  %.4f s\n", max_compute);
+        printf("    Min Compute Time:  %.4f s\n", min_compute);
+        printf("    Compute Imbalance: %.2f%%\n", compute_imbalance);
+        printf("==========================================\n");
     }
 #endif
-
     MPI_Finalize();
     return 0;
 }

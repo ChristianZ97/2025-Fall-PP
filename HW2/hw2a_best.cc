@@ -200,6 +200,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < num_threads; i++) {
         total_compute_time += t_args[i].compute_time;
         total_sync_time += t_args[i].sync_time;
+
         if (t_args[i].compute_time > max_compute) {
             max_compute = t_args[i].compute_time;
             slowest_thread = i;
@@ -210,37 +211,22 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    double avg_compute = total_compute_time / num_threads;
-    double avg_sync = total_sync_time / num_threads;
+    double avg_compute_time = total_compute_time / num_threads;
+    double avg_sync_time = total_sync_time / num_threads;
+    double cpu_time = total_time - io_time;
     double imbalance = (max_compute > 0) ? (max_compute - min_compute) / max_compute * 100 : 0.0;
-    double parallel_efficiency = (avg_compute / total_time) * 100;
-    double sync_overhead = (avg_sync / avg_compute) * 100;
 
-    // === Report-friendly output ===
-    printf("==========================================\n");
-    printf("HW2A Performance Report\n");
-    printf("==========================================\n");
-    printf("Configuration:\n");
-    printf("  Threads:             %d\n", num_threads);
-    printf("  Parallelization:     pthread + dynamic task\n");
-    printf("  SIMD:                SSE2 Unroll-6\n\n");
-    
-    printf("Timing Breakdown:\n");
-    printf("  Total Time:          %.4f s\n", total_time);
-    printf("  Compute (avg):       %.4f s  (%.1f%%)\n", avg_compute, (avg_compute/total_time)*100);
-    printf("  Sync (avg):          %.4f s  (%.1f%%)\n", avg_sync, (avg_sync/total_time)*100);
-    printf("  IO:                  %.4f s  (%.1f%%)\n\n", io_time, (io_time/total_time)*100);
-    
-    printf("Performance Metrics:\n");
-    printf("  Parallel Efficiency: %.2f%%\n", parallel_efficiency);
-    printf("  Sync Overhead:       %.2f%% (sync/compute)\n\n", sync_overhead);
-    
-    printf("Load Balance:\n");
-    printf("  Max Thread (T%d):    %.4f s\n", slowest_thread, max_compute);
-    printf("  Min Thread (T%d):    %.4f s\n", fastest_thread, min_compute);
-    printf("  Imbalance:           %.2f%% ((max-min)/max)\n", imbalance);
-    printf("==========================================\n");
+    printf("Threads=%d, Total Time: %.6f s\n", num_threads, total_time);
+    printf("  IO Time: %.6f s (%.2f%%)\n", io_time, (io_time / total_time) * 100);
+    printf("  Avg Thread Compute Time: %.6f s (%.2f%%)\n", avg_compute_time, (avg_compute_time / total_time) * 100);
+    printf("  Avg Thread Sync Time: %.6f s (%.2f%%)\n", avg_sync_time, (avg_sync_time / total_time) * 100);
+    printf("  CPU Time: %.6f s (%.2f%%)\n", cpu_time, (cpu_time / total_time) * 100);
+    printf("  Thread Load Balance:\n");
+    printf("    Slowest Thread %d: %.6f s\n", slowest_thread, max_compute);
+    printf("    Fastest Thread %d: %.6f s\n", fastest_thread, min_compute);
+    printf("    Imbalance: %.2f%% ((max-min)/max)\n", imbalance);
 #endif
+
     return 0;
 }
 
@@ -288,10 +274,10 @@ void *local_mandelbrot(void *argv) {
             const __m128d y0_vec = _mm_set1_pd(y0);
 
             for (int i = 0; i <= width - 8; i += 8) {
-                __m128d repeats_vec_0 = _mm_setzero_pd();
-                __m128d repeats_vec_1 = _mm_setzero_pd();
-                __m128d repeats_vec_2 = _mm_setzero_pd();
-                __m128d repeats_vec_3 = _mm_setzero_pd();
+                __m128d repeats_vec_0 = _mm_setzero_pd();  // [repeats[0], repeats[1]]
+                __m128d repeats_vec_1 = _mm_setzero_pd();  // [repeats[2], repeats[3]]
+                __m128d repeats_vec_2 = _mm_setzero_pd();  // [repeats[4], repeats[5]]
+                __m128d repeats_vec_3 = _mm_setzero_pd();  // [repeats[6], repeats[7]]
 
                 __m128d x_vec_0 = _mm_setzero_pd();
                 __m128d y_vec_0 = _mm_setzero_pd();
