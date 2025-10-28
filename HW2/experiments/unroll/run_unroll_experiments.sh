@@ -79,19 +79,18 @@ for exe in $hw2a_targets; do
         
         # Parse NEW profiling output format for hw2a
         total_time=$(grep "Total Time:" $LOG_FILE | awk '{print $3}')
-        compute_time=$(grep "Compute (avg):" $LOG_FILE | awk '{print $3}')
-        compute_pct=$(grep "Compute (avg):" $LOG_FILE | grep -oP '\(\K[0-9.]+')
-        sync_time=$(grep "Sync (avg):" $LOG_FILE | awk '{print $3}')
-        sync_pct=$(grep "Sync (avg):" $LOG_FILE | grep -oP '\(\K[0-9.]+')
+        compute_time=$(grep "Compute:" $LOG_FILE | awk '{print $3}')
+        compute_pct=$(grep "Compute:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
+        comm_time=$(grep "Communication:" $LOG_FILE | awk '{print $3}')
+        comm_pct=$(grep "Communication:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
         io_time=$(grep "IO:" $LOG_FILE | awk '{print $2}')
         io_pct=$(grep "IO:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
         parallel_eff=$(grep "Parallel Efficiency:" $LOG_FILE | awk '{print $3}' | tr -d '%')
-        imbalance=$(grep "Imbalance:" $LOG_FILE | awk '{print $2}' | tr -d '%')
-        
-        echo "Total: ${total_time}s, Compute: ${compute_time}s (${compute_pct}%), Imbalance: ${imbalance}%"
+        imbalance=$(grep "Thread Imbalance:" $LOG_FILE | awk '{print $2}' | tr -d '%')
+        echo "Total: ${total_time}s, Compute: ${compute_time}s (${compute_pct}%), Comm: ${comm_time}s, Imbalance: ${imbalance}%"
         
         # Write to CSV
-        echo "$exe,$unroll,$total_time,$compute_time,$compute_pct,$sync_time,$sync_pct,$io_time,$io_pct,$imbalance,$parallel_eff,hw2a" >> $RESULT_FILE
+        echo "$exe,$unroll,$total_time,$compute_time,$compute_pct,$comm_time,$comm_pct,$io_time,$io_pct,$imbalance,$parallel_eff,hw2a" >> $RESULT_FILE
     fi
 done
 
@@ -115,16 +114,15 @@ for exe in $hw2b_targets; do
         srun -n3 -c4 ./$exe $OUTPUT_PNG $TESTCASE > $LOG_FILE 2>&1
         
         # Parse NEW profiling output format for hw2b
-        total_time=$(grep "Total Time:" $LOG_FILE | grep "Timing Breakdown" -A5 | grep "Total Time:" | awk '{print $3}')
-        compute_time=$(grep "Compute:" $LOG_FILE | grep "Timing Breakdown" -A5 | grep "Compute:" | awk '{print $2}')
-        compute_pct=$(grep "Compute:" $LOG_FILE | grep "Timing Breakdown" -A5 | grep "Compute:" | grep -oP '\(\K[0-9.]+')
-        comm_time=$(grep "Communication:" $LOG_FILE | awk '{print $2}')
+        total_time=$(grep "Total Time:" $LOG_FILE | awk '{print $3}')
+        compute_time=$(grep "Compute:" $LOG_FILE | awk '{print $3}')
+        compute_pct=$(grep "Compute:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
+        comm_time=$(grep "Communication:" $LOG_FILE | awk '{print $3}')
         comm_pct=$(grep "Communication:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
-        io_time=$(grep "IO:" $LOG_FILE | grep "Timing Breakdown" -A5 | grep "IO:" | awk '{print $2}')
-        io_pct=$(grep "IO:" $LOG_FILE | grep "Timing Breakdown" -A5 | grep "IO:" | grep -oP '\(\K[0-9.]+')
+        io_time=$(grep "IO:" $LOG_FILE | awk '{print $2}')
+        io_pct=$(grep "IO:" $LOG_FILE | grep -oP '\(\K[0-9.]+')
         parallel_eff=$(grep "Parallel Efficiency:" $LOG_FILE | awk '{print $3}' | tr -d '%')
-        imbalance=$(grep "Total Imbalance:" $LOG_FILE | awk '{print $3}' | tr -d '%')
-        
+        imbalance=$(grep "Thread Imbalance:" $LOG_FILE | awk '{print $2}' | tr -d '%')
         echo "Total: ${total_time}s, Compute: ${compute_time}s (${compute_pct}%), Comm: ${comm_time}s, Imbalance: ${imbalance}%"
         
         # Write to CSV (use Compute as compute, Communication as sync)

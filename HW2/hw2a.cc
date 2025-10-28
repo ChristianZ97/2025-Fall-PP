@@ -218,27 +218,16 @@ int main(int argc, char *argv[]) {
 
     // === Report-friendly output ===
     printf("==========================================\n");
-    printf("HW2A Performance Report\n");
-    printf("==========================================\n");
-    printf("Configuration:\n");
-    printf("  Threads:             %d\n", num_threads);
-    printf("  Parallelization:     pthread + dynamic task\n");
-    printf("  SIMD:                SSE2 Unroll-6\n\n");
-
-    printf("Timing Breakdown:\n");
+    printf("  Pthreads:            %d\n", num_threads);
     printf("  Total Time:          %.4f s\n", total_time);
-    printf("  Compute (avg):       %.4f s  (%.1f%%)\n", avg_compute, (avg_compute / total_time) * 100);
-    printf("  Sync (avg):          %.4f s  (%.1f%%)\n", avg_sync, (avg_sync / total_time) * 100);
+    printf("  Compute:             %.4f s  (%.1f%%)\n", avg_compute, (avg_compute / total_time) * 100);
+    printf("  Communication:       %.4f s  (%.1f%%)\n", avg_sync, (avg_sync / total_time) * 100);
     printf("  IO:                  %.4f s  (%.1f%%)\n\n", io_time, (io_time / total_time) * 100);
-
-    printf("Performance Metrics:\n");
     printf("  Parallel Efficiency: %.2f%%\n", parallel_efficiency);
-    printf("  Sync Overhead:       %.2f%% (sync/compute)\n\n", sync_overhead);
-
-    printf("Load Balance:\n");
+    printf("  Comm Overhead:       %.2f%% (sync/compute)\n\n", sync_overhead);
     printf("  Max Thread (T%d):    %.4f s\n", slowest_thread, max_compute);
     printf("  Min Thread (T%d):    %.4f s\n", fastest_thread, min_compute);
-    printf("  Imbalance:           %.2f%% ((max-min)/max)\n", imbalance);
+    printf("  Thread Imbalance:    %.2f%% ((max-min)/max)\n", imbalance);
     printf("==========================================\n");
 #endif
     return 0;

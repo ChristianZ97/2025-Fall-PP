@@ -302,35 +302,21 @@ int main(int argc, char *argv[]) {
 
         // === Report-friendly output ===
         printf("==========================================\n");
-        printf("HW2B Performance Report\n");
-        printf("==========================================\n");
-        printf("Configuration:\n");
         printf("  MPI Processes:       %d\n", numtasks);
-        printf("  OpenMP Threads/Proc: %d\n", num_threads);
-        printf("  Total Cores:         %d\n", total_cores);
-        printf("  Parallelization:     MPI+OpenMP dynamic-1\n");
-        printf("  SIMD:                SSE2 Unroll-4\n\n");
-        
-        printf("Timing Breakdown (Average):\n");
+        printf("  OpenMP Threads:      %d\n", num_threads);
         printf("  Total Time:          %.4f s\n", avg_total);
-        printf("  Compute:             %.4f s  (%.1f%%)\n", avg_compute, (avg_compute/avg_total)*100);
-        printf("  Communication:       %.4f s  (%.1f%%)\n", avg_comm, (avg_comm/avg_total)*100);
-        printf("  IO:                  %.4f s  (%.1f%%)\n\n", avg_io, (avg_io/avg_total)*100);
-        
-        printf("Performance Metrics:\n");
+        printf("  Compute:             %.4f s  (%.1f%%)\n", avg_compute, (avg_compute / avg_total) * 100);
+        printf("  Communication:       %.4f s  (%.1f%%)\n", avg_comm, (avg_comm / avg_total) * 100);
+        printf("  IO:                  %.4f s  (%.1f%%)\n\n", avg_io, (avg_io / avg_total) * 100);
         printf("  Parallel Efficiency: %.2f%%\n", parallel_efficiency);
         printf("  Comm Overhead:       %.2f%% (comm/compute)\n", comm_overhead);
         printf("  IO Overhead:         %.2f%% (io/compute)\n\n", io_overhead);
-        
-        printf("Load Balance:\n");
-        printf("  Process Level:\n");
-        printf("    Max Total Time:    %.4f s\n", max_total);
-        printf("    Min Total Time:    %.4f s\n", min_total);
-        printf("    Total Imbalance:   %.2f%%\n", total_imbalance);
-        printf("  Compute Level:\n");
-        printf("    Max Compute Time:  %.4f s\n", max_compute);
-        printf("    Min Compute Time:  %.4f s\n", min_compute);
-        printf("    Compute Imbalance: %.2f%%\n", compute_imbalance);
+        printf("  Max Process:         %.4f s\n", max_total);
+        printf("  Min Process:         %.4f s\n", min_total);
+        printf("  Process Imbalance:   %.2f%%\n", total_imbalance);
+        printf("  Max Thread:          %.4f s\n", max_compute);
+        printf("  Min Thread:          %.4f s\n", min_compute);
+        printf("  Thread Imbalance:    %.2f%%\n", compute_imbalance);
         printf("==========================================\n");
     }
 #endif
