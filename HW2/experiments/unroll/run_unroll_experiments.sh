@@ -2,6 +2,7 @@
 
 #================================================================
 # Unroll Experiments - Using Makefile with Testcase Parameters
+# usage: ./run_unroll_experiments.sh 2>&1 | tee experiment_$(date +%Y%m%d_%H%M%S).log
 #================================================================
 
 # Configuration
