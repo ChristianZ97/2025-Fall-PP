@@ -9,6 +9,7 @@ TESTCASE_DIR="../../testcases"
 OUTPUT_DIR="unroll_results_all_cases"
 RESULT_FILE="${OUTPUT_DIR}/summary_results.csv"
 TEMP_LOG="temp_run.log"
+SCRIPT_DIR=$(pwd)
 
 # Check if testcase directory exists
 if [[ ! -d "$TESTCASE_DIR" ]]; then
@@ -62,7 +63,7 @@ run_and_parse() {
     fi
 
     # Execute command
-    eval "$srun_args ./$exe \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
+    eval "$srun_args \"$SCRIPT_DIR/$exe\" \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
     
     # Use awk '{print $3}' to get the 3rd field, which is the numeric value.
     time=$(grep "Total Time:" "$TEMP_LOG" | head -1 | awk '{print $3}')
