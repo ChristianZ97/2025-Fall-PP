@@ -134,7 +134,9 @@ int main(int argc, char *argv[]) {
 {
 #pragma omp for schedule(dynamic, 1) nowait
     for (int local_j = 0; local_j < my_count; ++local_j) {
-        const int j = my_rank + local_j * numtasks;
+        // MODIFIED: Static continuous allocation instead of interleaved
+        // Each rank processes a contiguous block of rows
+        const int j = my_start + local_j;
         const double y0 = j * y_scale + lower;
         const __m128d y0_vec = _mm_set1_pd(y0);
 
@@ -244,6 +246,8 @@ int main(int argc, char *argv[]) {
     NVTX_PUSH("Comm_Gatherv");
 #endif
 
+    // MODIFIED: Simplified Gatherv logic for static continuous allocation
+    // Since data is already contiguous, we don't need the reordering step
     if (my_rank == 0) {
         int *recvcounts = (int *)malloc(numtasks * sizeof(int));
         int *displacements = (int *)malloc(numtasks * sizeof(int));
@@ -254,20 +258,9 @@ int main(int argc, char *argv[]) {
             displacements[rank] = rank * width * base_chunk_size + std::min(rank, remainder) * width;
         }
 
-        int *temp_image = (int *)malloc(width * height * sizeof(int));
-        MPI_Gatherv(image, width * my_count, MPI_INT, temp_image, recvcounts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
+        // Direct gather into global_image - no reordering needed
+        MPI_Gatherv(image, width * my_count, MPI_INT, global_image, recvcounts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
 
-        for (int rank = 0; rank < numtasks; ++rank) {
-            const int count = (rank < remainder) ? (base_chunk_size + 1) : base_chunk_size;
-            const int offset = displacements[rank];
-
-            for (int local_j = 0; local_j < count; ++local_j) {
-                const int global_row = rank + local_j * numtasks;
-                memcpy(&global_image[global_row * width], &temp_image[offset + local_j * width], width * sizeof(int));
-            }
-        }
-
-        free(temp_image);
         free(recvcounts);
         free(displacements);
     } else {

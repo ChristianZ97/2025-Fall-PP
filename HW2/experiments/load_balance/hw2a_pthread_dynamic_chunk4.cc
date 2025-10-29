@@ -71,7 +71,7 @@ static inline double get_wall_time() {
 }
 #endif
 
-#define CHUNK_SIZE 1
+#define CHUNK_SIZE 4
 
 pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
 int next_row = 0;

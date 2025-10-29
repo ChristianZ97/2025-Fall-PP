@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
     const __m128d one = _mm_set1_pd(1.0);
 #pragma omp parallel num_threads(num_threads)
 {
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for schedule(guided) nowait
     for (int local_j = 0; local_j < my_count; ++local_j) {
         const int j = my_rank + local_j * numtasks;
         const double y0 = j * y_scale + lower;

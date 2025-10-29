@@ -71,22 +71,23 @@ static inline double get_wall_time() {
 }
 #endif
 
-#define CHUNK_SIZE 1
-
-pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
-int next_row = 0;
+// ============================================================================
+// REMOVED: Dynamic task allocation variables (mutex and next_row counter)
+// ============================================================================
+// pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
+// int next_row = 0;
 
 typedef struct {
     int iters;
-    int width;  // fix, since we divide by y
+    int width;
     int height;
-    int my_height_start;
-    int my_height_end;
+    int my_height_start;  // CHANGED: Now used for static range assignment
+    int my_height_end;    // CHANGED: Now used for static range assignment
     int *image;
-    double left;   // Real part start (x0)
-    double right;  // Real part end (x1)
-    double lower;  // Imaginary part start (y0)
-    double upper;  // Imaginary part end (y1)
+    double left;
+    double right;
+    double lower;
+    double upper;
 #ifdef PROFILING
     double compute_time;
     double sync_time;
@@ -111,15 +112,15 @@ int main(int argc, char *argv[]) {
 
     const char *filename = argv[1];
     const int iters = strtol(argv[2], NULL, 10);
-    const double left = strtod(argv[3], NULL);   // Real part start (x0)
-    const double right = strtod(argv[4], NULL);  // Real part end (x1)
-    const double lower = strtod(argv[5], NULL);  // Imaginary part start (y0)
-    const double upper = strtod(argv[6], NULL);  // Imaginary part end (y1)
+    const double left = strtod(argv[3], NULL);
+    const double right = strtod(argv[4], NULL);
+    const double lower = strtod(argv[5], NULL);
+    const double upper = strtod(argv[6], NULL);
     const int width = strtol(argv[7], NULL, 10);
     const int height = strtol(argv[8], NULL, 10);
 
 #ifdef PROFILING
-    NVTX_POP();  // end Setup
+    NVTX_POP();
     NVTX_PUSH("Mem_Alloc");
 #endif
 
@@ -129,7 +130,7 @@ int main(int argc, char *argv[]) {
     ThreadArg t_args[num_threads];
 
 #ifdef PROFILING
-    NVTX_POP();  // end Mem_Alloc
+    NVTX_POP();
 #endif
 
     // ========================================================================
@@ -140,6 +141,12 @@ int main(int argc, char *argv[]) {
     NVTX_PUSH("Thread_Creation");
 #endif
 
+    // ============================================================================
+    // ADDED: Static continuous row allocation - calculate ranges for each thread
+    // ============================================================================
+    int rows_per_thread = height / num_threads;
+    int remaining_rows = height % num_threads;
+
     for (int i = 0; i < num_threads; i++) {
         t_args[i].iters = iters;
         t_args[i].width = width;
@@ -149,6 +156,21 @@ int main(int argc, char *argv[]) {
         t_args[i].right = right;
         t_args[i].lower = lower;
         t_args[i].upper = upper;
+
+        // ============================================================================
+        // CHANGED: Assign static continuous row ranges to each thread
+        // First 'remaining_rows' threads get (rows_per_thread + 1) rows
+        // Remaining threads get rows_per_thread rows
+        // ============================================================================
+        if (i < remaining_rows) {
+            t_args[i].my_height_start = i * (rows_per_thread + 1);
+            t_args[i].my_height_end = t_args[i].my_height_start + rows_per_thread + 1;
+        } else {
+            t_args[i].my_height_start = remaining_rows * (rows_per_thread + 1) + 
+                                        (i - remaining_rows) * rows_per_thread;
+            t_args[i].my_height_end = t_args[i].my_height_start + rows_per_thread;
+        }
+
 #ifdef PROFILING
         t_args[i].compute_time = 0.0;
         t_args[i].sync_time = 0.0;
@@ -157,8 +179,8 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef PROFILING
-    NVTX_POP();  // end Thread_Creation
-    NVTX_POP();  // end Compute_Main
+    NVTX_POP();
+    NVTX_POP();
     NVTX_PUSH("Thread_Join");
 #endif
 
@@ -166,7 +188,7 @@ int main(int argc, char *argv[]) {
         pthread_join(threads[i], NULL);
 
 #ifdef PROFILING
-    NVTX_POP();  // end Thread_Join
+    NVTX_POP();
 #endif
 
     // ========================================================================
@@ -181,7 +203,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     io_time += get_wall_time() - temp_start;
-    NVTX_POP();  // end IO_Write
+    NVTX_POP();
 #endif
 
     free(image);
@@ -192,7 +214,6 @@ int main(int argc, char *argv[]) {
 #ifdef PROFILING
     double total_time = get_wall_time() - total_start_time;
 
-    // Aggregate thread timings and find min/max
     double total_compute_time = 0.0, total_sync_time = 0.0;
     double max_compute = 0.0, min_compute = 1e9;
     int slowest_thread = 0, fastest_thread = 0;
@@ -216,7 +237,6 @@ int main(int argc, char *argv[]) {
     double parallel_efficiency = (avg_compute / total_time) * 100;
     double sync_overhead = (avg_sync / avg_compute) * 100;
 
-    // === Report-friendly output ===
     printf("==========================================\n");
     printf("  Pthreads:            %d\n", num_threads);
     printf("  Total Time:          %.4f s\n", total_time);
@@ -246,137 +266,142 @@ void *local_mandelbrot(void *argv) {
     const double y_scale = (upper - lower) / height;
     int *image = t_arg->image;
 
+    // ============================================================================
+    // CHANGED: Use pre-assigned static range instead of dynamic allocation
+    // ============================================================================
+    const int my_start_row = t_arg->my_height_start;
+    const int my_end_row = t_arg->my_height_end;
+
 #ifdef PROFILING
     double local_compute_time = 0.0;
-    double local_sync_time = 0.0;
+    double local_sync_time = 0.0;  // Will remain 0 for static allocation
 #endif
 
-    while (1) {
+    // ============================================================================
+    // REMOVED: Dynamic task grabbing loop with mutex
+    // Old code structure:
+    // while (1) {
+    //     pthread_mutex_lock(&task_mutex);
+    //     const int my_start_row = next_row;
+    //     next_row += CHUNK_SIZE;
+    //     pthread_mutex_unlock(&task_mutex);
+    //     if (my_start_row >= height) break;
+    //     const int my_end_row = (my_start_row + CHUNK_SIZE > height) ? height : my_start_row + CHUNK_SIZE;
+    //     ...
+    // }
+    // ============================================================================
+
+    const __m128d four = _mm_set1_pd(4.0);
+    const __m128d one = _mm_set1_pd(1.0);
+
 #ifdef PROFILING
-        double sync_start = get_wall_time();
-#endif
-        pthread_mutex_lock(&task_mutex);
-        const int my_start_row = next_row;
-        next_row += CHUNK_SIZE;
-        pthread_mutex_unlock(&task_mutex);
-#ifdef PROFILING
-        local_sync_time += get_wall_time() - sync_start;
+    double compute_start = get_wall_time();
 #endif
 
-        if (my_start_row >= height) break;
-        const int my_end_row = (my_start_row + CHUNK_SIZE > height) ? height : my_start_row + CHUNK_SIZE;
-        const __m128d four = _mm_set1_pd(4.0);
-        const __m128d one = _mm_set1_pd(1.0);
+    // ============================================================================
+    // CHANGED: Process the pre-assigned continuous range directly (no loop, no mutex)
+    // ============================================================================
+    for (int j = my_start_row; j < my_end_row; ++j) {
+        const double y0 = j * y_scale + lower;
+        const __m128d y0_vec = _mm_set1_pd(y0);
 
-#ifdef PROFILING
-        double compute_start = get_wall_time();
-#endif
+        for (int i = 0; i <= width - 8; i += 8) {
+            __m128d repeats_vec_0 = _mm_setzero_pd();
+            __m128d repeats_vec_1 = _mm_setzero_pd();
+            __m128d repeats_vec_2 = _mm_setzero_pd();
+            __m128d repeats_vec_3 = _mm_setzero_pd();
 
-        for (int j = my_start_row; j < my_end_row; ++j) {
-            const double y0 = j * y_scale + lower;
-            const __m128d y0_vec = _mm_set1_pd(y0);
+            __m128d x_vec_0 = _mm_setzero_pd();
+            __m128d y_vec_0 = _mm_setzero_pd();
+            __m128d x_vec_1 = _mm_setzero_pd();
+            __m128d y_vec_1 = _mm_setzero_pd();
+            __m128d x_vec_2 = _mm_setzero_pd();
+            __m128d y_vec_2 = _mm_setzero_pd();
+            __m128d x_vec_3 = _mm_setzero_pd();
+            __m128d y_vec_3 = _mm_setzero_pd();
 
-            for (int i = 0; i <= width - 8; i += 8) {
-                __m128d repeats_vec_0 = _mm_setzero_pd();  // [repeats[0], repeats[1]]
-                __m128d repeats_vec_1 = _mm_setzero_pd();  // [repeats[2], repeats[3]]
-                __m128d repeats_vec_2 = _mm_setzero_pd();  // [repeats[4], repeats[5]]
-                __m128d repeats_vec_3 = _mm_setzero_pd();  // [repeats[6], repeats[7]]
+            const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+            const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
+            const __m128d x0_vec_2 = _mm_setr_pd((i + 4) * x_scale + left, (i + 5) * x_scale + left);
+            const __m128d x0_vec_3 = _mm_setr_pd((i + 6) * x_scale + left, (i + 7) * x_scale + left);
 
-                __m128d x_vec_0 = _mm_setzero_pd();
-                __m128d y_vec_0 = _mm_setzero_pd();
-                __m128d x_vec_1 = _mm_setzero_pd();
-                __m128d y_vec_1 = _mm_setzero_pd();
-                __m128d x_vec_2 = _mm_setzero_pd();
-                __m128d y_vec_2 = _mm_setzero_pd();
-                __m128d x_vec_3 = _mm_setzero_pd();
-                __m128d y_vec_3 = _mm_setzero_pd();
+            for (int r = 0; r < iters; ++r) {
+                __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);
+                __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);
+                __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);
+                __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);
+                __m128d x2_2 = _mm_mul_pd(x_vec_2, x_vec_2);
+                __m128d y2_2 = _mm_mul_pd(y_vec_2, y_vec_2);
+                __m128d x2_3 = _mm_mul_pd(x_vec_3, x_vec_3);
+                __m128d y2_3 = _mm_mul_pd(y_vec_3, y_vec_3);
 
-                const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
-                const __m128d x0_vec_2 = _mm_setr_pd((i + 4) * x_scale + left, (i + 5) * x_scale + left);
-                const __m128d x0_vec_3 = _mm_setr_pd((i + 6) * x_scale + left, (i + 7) * x_scale + left);
+                __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
+                __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);
+                __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
+                __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);
+                __m128d len_sq_2 = _mm_add_pd(x2_2, y2_2);
+                __m128d cmp_2 = _mm_cmplt_pd(len_sq_2, four);
+                __m128d len_sq_3 = _mm_add_pd(x2_3, y2_3);
+                __m128d cmp_3 = _mm_cmplt_pd(len_sq_3, four);
 
-                for (int r = 0; r < iters; ++r) {
-                    __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);
-                    __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);
-                    __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);
-                    __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);
-                    __m128d x2_2 = _mm_mul_pd(x_vec_2, x_vec_2);
-                    __m128d y2_2 = _mm_mul_pd(y_vec_2, y_vec_2);
-                    __m128d x2_3 = _mm_mul_pd(x_vec_3, x_vec_3);
-                    __m128d y2_3 = _mm_mul_pd(y_vec_3, y_vec_3);
+                repeats_vec_0 = _mm_add_pd(repeats_vec_0, _mm_and_pd(cmp_0, one));
+                repeats_vec_1 = _mm_add_pd(repeats_vec_1, _mm_and_pd(cmp_1, one));
+                repeats_vec_2 = _mm_add_pd(repeats_vec_2, _mm_and_pd(cmp_2, one));
+                repeats_vec_3 = _mm_add_pd(repeats_vec_3, _mm_and_pd(cmp_3, one));
 
-                    __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
-                    __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);
-                    __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
-                    __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);
-                    __m128d len_sq_2 = _mm_add_pd(x2_2, y2_2);
-                    __m128d cmp_2 = _mm_cmplt_pd(len_sq_2, four);
-                    __m128d len_sq_3 = _mm_add_pd(x2_3, y2_3);
-                    __m128d cmp_3 = _mm_cmplt_pd(len_sq_3, four);
+                const int mask_0 = _mm_movemask_pd(cmp_0);
+                const int mask_1 = _mm_movemask_pd(cmp_1);
+                const int mask_2 = _mm_movemask_pd(cmp_2);
+                const int mask_3 = _mm_movemask_pd(cmp_3);
+                if (!mask_0 && !mask_1 && !mask_2 && !mask_3) break;
 
-                    repeats_vec_0 = _mm_add_pd(repeats_vec_0, _mm_and_pd(cmp_0, one));
-                    repeats_vec_1 = _mm_add_pd(repeats_vec_1, _mm_and_pd(cmp_1, one));
-                    repeats_vec_2 = _mm_add_pd(repeats_vec_2, _mm_and_pd(cmp_2, one));
-                    repeats_vec_3 = _mm_add_pd(repeats_vec_3, _mm_and_pd(cmp_3, one));
+                __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
+                y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
+                x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
 
-                    const int mask_0 = _mm_movemask_pd(cmp_0);
-                    const int mask_1 = _mm_movemask_pd(cmp_1);
-                    const int mask_2 = _mm_movemask_pd(cmp_2);
-                    const int mask_3 = _mm_movemask_pd(cmp_3);
-                    if (!mask_0 && !mask_1 && !mask_2 && !mask_3) break;
+                __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
+                y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
+                x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
 
-                    __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
-                    y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
-                    x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
+                __m128d xy_2 = _mm_mul_pd(x_vec_2, y_vec_2);
+                y_vec_2 = _mm_add_pd(_mm_add_pd(xy_2, xy_2), y0_vec);
+                x_vec_2 = _mm_add_pd(_mm_sub_pd(x2_2, y2_2), x0_vec_2);
 
-                    __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
-                    y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
-                    x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
-
-                    __m128d xy_2 = _mm_mul_pd(x_vec_2, y_vec_2);
-                    y_vec_2 = _mm_add_pd(_mm_add_pd(xy_2, xy_2), y0_vec);
-                    x_vec_2 = _mm_add_pd(_mm_sub_pd(x2_2, y2_2), x0_vec_2);
-
-                    __m128d xy_3 = _mm_mul_pd(x_vec_3, y_vec_3);
-                    y_vec_3 = _mm_add_pd(_mm_add_pd(xy_3, xy_3), y0_vec);
-                    x_vec_3 = _mm_add_pd(_mm_sub_pd(x2_3, y2_3), x0_vec_3);
-                }
-
-                __m128i int_vec_0 = _mm_cvtpd_epi32(repeats_vec_0);
-                __m128i int_vec_1 = _mm_cvtpd_epi32(repeats_vec_1);
-                __m128i int_vec_2 = _mm_cvtpd_epi32(repeats_vec_2);
-                __m128i int_vec_3 = _mm_cvtpd_epi32(repeats_vec_3);
-
-                int *image_ptr = &image[j * width + i];
-                _mm_storel_epi64((__m128i *)image_ptr, int_vec_0);
-                _mm_storel_epi64((__m128i *)(image_ptr + 2), int_vec_1);
-                _mm_storel_epi64((__m128i *)(image_ptr + 4), int_vec_2);
-                _mm_storel_epi64((__m128i *)(image_ptr + 6), int_vec_3);
+                __m128d xy_3 = _mm_mul_pd(x_vec_3, y_vec_3);
+                y_vec_3 = _mm_add_pd(_mm_add_pd(xy_3, xy_3), y0_vec);
+                x_vec_3 = _mm_add_pd(_mm_sub_pd(x2_3, y2_3), x0_vec_3);
             }
 
-            for (int i = (width / 8) * 8; i < width; ++i) {
-                const double x0 = i * x_scale + left;
-                double x = 0, y = 0;
-                int repeats = 0;
-                for (; repeats < iters; ++repeats) {
-                    const double x2 = x * x, y2 = y * y;
-                    if (x2 + y2 >= 4) break;
-                    y = 2 * x * y + y0;
-                    x = x2 - y2 + x0;
-                }
-                image[j * width + i] = repeats;
-            }
+            __m128i int_vec_0 = _mm_cvtpd_epi32(repeats_vec_0);
+            __m128i int_vec_1 = _mm_cvtpd_epi32(repeats_vec_1);
+            __m128i int_vec_2 = _mm_cvtpd_epi32(repeats_vec_2);
+            __m128i int_vec_3 = _mm_cvtpd_epi32(repeats_vec_3);
+
+            int *image_ptr = &image[j * width + i];
+            _mm_storel_epi64((__m128i *)image_ptr, int_vec_0);
+            _mm_storel_epi64((__m128i *)(image_ptr + 2), int_vec_1);
+            _mm_storel_epi64((__m128i *)(image_ptr + 4), int_vec_2);
+            _mm_storel_epi64((__m128i *)(image_ptr + 6), int_vec_3);
         }
 
-#ifdef PROFILING
-        local_compute_time += get_wall_time() - compute_start;
-#endif
+        for (int i = (width / 8) * 8; i < width; ++i) {
+            const double x0 = i * x_scale + left;
+            double x = 0, y = 0;
+            int repeats = 0;
+            for (; repeats < iters; ++repeats) {
+                const double x2 = x * x, y2 = y * y;
+                if (x2 + y2 >= 4) break;
+                y = 2 * x * y + y0;
+                x = x2 - y2 + x0;
+            }
+            image[j * width + i] = repeats;
+        }
     }
 
 #ifdef PROFILING
+    local_compute_time += get_wall_time() - compute_start;
     t_arg->compute_time = local_compute_time;
-    t_arg->sync_time = local_sync_time;
+    t_arg->sync_time = local_sync_time;  // Will be 0 for static allocation
 #endif
 
     return NULL;
@@ -384,86 +409,38 @@ void *local_mandelbrot(void *argv) {
 
 /**
  * @brief Writes the raw iteration data into a PNG image file.
- *
- * @param filename The name of the output PNG file.
- * @param iters The maximum number of iterations used for the calculation.
- * @param width The width of the image in pixels.
- * @param height The height of the image in pixels.
- * @param buffer A pointer to an integer array of size width*height, where each
- *               element stores the number of iterations for the corresponding
- *               pixel.
  */
 void write_png(const char *filename, int iters, int width, int height, const int *buffer) {
-    // Open the file for writing in binary mode.
     FILE *fp = fopen(filename, "wb");
-    // assert(fp);  // Ensure the file was opened successfully.
-
-    // Initialize the libpng structures for writing.
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    // assert(png_ptr);  // Ensure the png_struct was created.
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    // assert(info_ptr);  // Ensure the info_struct was created.
-
-    // Set up the output stream for libpng.
     png_init_io(png_ptr, fp);
-
-    // Write the PNG header information.
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-
-    // Disable PNG filtering for simplicity and speed.
     png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
-
-    // Write the info chunk to the file.
     png_write_info(png_ptr, info_ptr);
-
-    // Set the compression level (1 is a good balance between speed and
-    // size).
     png_set_compression_level(png_ptr, 1);
-
-    // Allocate a buffer for a single row of the image. Each pixel is 3
-    // bytes (R, G, B).
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
 
-    // Iterate through each row of the image data.
     for (int y = 0; y < height; ++y) {
-        // Clear the row buffer to black (0,0,0).
         memset(row, 0, row_size);
-
-        // Iterate through each pixel in the row.
         for (int x = 0; x < width; ++x) {
-            // Get the iteration count for the current pixel.
             int p = buffer[(height - 1 - y) * width + x];
-
-            // Get a pointer to the start of the color data for this
-            // pixel.
             png_bytep color = row + x * 3;
-
-            // If the point escaped (p != iters), assign a color to
-            // it.
             if (p != iters) {
                 if (p & 16) {
-                    color[0] = 240;                       // Red component
-                    color[1] = color[2] = (p % 16) * 16;  // Green and Blue components
+                    color[0] = 240;
+                    color[1] = color[2] = (p % 16) * 16;
                 } else {
-                    color[0] = (p % 16) * 16;  // Red component
+                    color[0] = (p % 16) * 16;
                 }
             }
         }
-
-        // Write the completed row to the PNG file.
         png_write_row(png_ptr, row);
     }
 
-    // Free the memory for the row buffer.
     free(row);
-
-    // Finalize the PNG file.
     png_write_end(png_ptr, NULL);
-
-    // Clean up the libpng structures.
     png_destroy_write_struct(&png_ptr, &info_ptr);
-
-    // Close the file.
     fclose(fp);
 }
