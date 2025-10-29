@@ -10,6 +10,8 @@ OUTPUT_DIR="unroll_results_all_cases"
 RESULT_FILE="${OUTPUT_DIR}/summary_results.csv"
 TEMP_LOG="temp_run.log"
 SCRIPT_DIR=$(pwd)
+COMPUTE_DIR=${SCRIPT_DIR/\/beegfs/}
+RETRY_DELAY=2
 
 # Check if testcase directory exists
 if [[ ! -d "$TESTCASE_DIR" ]]; then
@@ -45,46 +47,43 @@ fi
 echo "Found $TESTCASE_COUNT testcases to run for unroll experiments."
 echo ""
 
-# --- Function to run and parse results ---
+# --- Function to run and parse results with infinite retry ---
 run_and_parse() {
     local exe=$1
     local testcase_file=$2
     local srun_args=$3
 
     local testcase_name=$(basename "$testcase_file" .txt)
-    # FIX: Redirect progress message to stderr (>&2)
-    echo -n "  Running on $testcase_name... " >&2
     
     local TESTCASE_ARGS=$(cat "$testcase_file")
     if [[ -z "$TESTCASE_ARGS" ]]; then
-        # FIX: Redirect skip message to stderr
+        echo -n "  Running on $testcase_name... " >&2
         echo "SKIPPED (empty testcase file)" >&2
         return 1
     fi
 
-    # Execute command
-    eval "$srun_args \"$SCRIPT_DIR/$exe\" \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
-    
-    # Use awk '{print $3}' to get the 3rd field, which is the numeric value.
-    time=$(grep "Total Time:" "$TEMP_LOG" | head -1 | awk '{print $3}')
-    imbalance=$(grep "Thread Imbalance:" "$TEMP_LOG" | head -1 | awk '{print $3}' | tr -d '%')
-    
-    # Check to ensure variables are numeric
-    if ! [[ "$time" =~ ^[0-9.]+$ && "$imbalance" =~ ^[0-9.]+$ ]]; then
-        # FIX: Redirect all error-related messages to stderr
-        echo "FAILED (Could not parse numeric results from $TEMP_LOG)" >&2
-        echo "Parsed Time: '$time', Parsed Imbalance: '$imbalance'" >&2
-        cat "$TEMP_LOG" >&2
-        return 1
-    fi
+    # Use an infinite loop to retry until success
+    while true; do
+        echo -n "  Running on $testcase_name... " >&2
 
-    # This is the ONLY output to stdout, which gets captured by 'results'.
-    echo "$time $imbalance"
-    
-    # This final status message goes to stderr.
-    echo "Done (${time}s, ${imbalance}%)" >&2
+        # Execute command using compute-node-valid absolute path
+        eval "$srun_args \"$COMPUTE_DIR/$exe\" \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
+        
+        time=$(grep "Total Time:" "$TEMP_LOG" | head -1 | awk '{print $3}')
+        imbalance=$(grep "Thread Imbalance:" "$TEMP_LOG" | head -1 | awk '{print $3}' | tr -d '%')
+        
+        # If parsing is successful, we are done. Return success.
+        if [[ "$time" =~ ^[0-9.]+$ && "$imbalance" =~ ^[0-9.]+$ ]]; then
+            echo "$time $imbalance" # This is the ONLY output to stdout
+            echo "Done (${time}s, ${imbalance}%)" >&2
+            return 0 # Exit function with success, breaking the loop
+        fi
+
+        # If we reach here, it failed. Print a message and wait before retrying.
+        echo "FAILED. Retrying in $RETRY_DELAY seconds..." >&2
+        sleep $RETRY_DELAY
+    done
 }
-
 
 # --- hw2a Unroll Experiments ---
 echo "=========================================="
