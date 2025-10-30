@@ -1,28 +1,20 @@
 #!/bin/bash
-#================================================================
-# Scalability Experiments (All Testcases) - Strong Scaling
-# 使用方法: ./run_scalability_experiments.sh 2>&1 | tee scalability_$(date +%Y%m%d_%H%M%S).log
-#================================================================
 
-# 配置
 TESTCASE_DIR="../../testcases"
 OUTPUT_DIR="scalability_results"
-RESULT_FILE="${OUTPUT_DIR}/scalability_summary.csv"
+RESULT_FILE="${OUTPUT_DIR}/summary_results.csv"
 TEMP_LOG="temp_run.log"
 SCRIPT_DIR=$(pwd)
 COMPUTE_DIR=${SCRIPT_DIR/\/beegfs/}
 RETRY_DELAY=2
 
-# 檢查測試案例目錄
 if [[ ! -d "$TESTCASE_DIR" ]]; then
     echo "Error: Testcase directory $TESTCASE_DIR not found!"
     exit 1
 fi
 
-# 建立輸出目錄
 mkdir -p $OUTPUT_DIR
 
-# 初始化 CSV 檔案標頭
 echo "Program,Num_Processes,Num_Threads,Total_Cores,Total_Execution_Time,Avg_Imbalance_Pct,Speedup,Efficiency,Type" > $RESULT_FILE
 
 echo "=========================================="
@@ -47,7 +39,6 @@ fi
 echo "Found $TESTCASE_COUNT testcases to run for scalability experiments."
 echo ""
 
-# --- Function to run and parse results with infinite retry ---
 run_and_parse() {
     local exe=$1
     local testcase_file=$2
@@ -62,30 +53,25 @@ run_and_parse() {
         return 1
     fi
 
-    # Use an infinite loop to retry until success
     while true; do
         echo -n "  Running on $testcase_name... " >&2
 
-        # Execute command using compute-node-valid absolute path
         eval "$srun_args \"$COMPUTE_DIR/$exe\" \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
         
         time=$(grep "Total Time:" "$TEMP_LOG" | head -1 | awk '{print $3}')
         imbalance=$(grep "Thread Imbalance:" "$TEMP_LOG" | head -1 | awk '{print $3}' | tr -d '%')
         
-        # If parsing is successful, we are done. Return success.
         if [[ "$time" =~ ^[0-9.]+$ && "$imbalance" =~ ^[0-9.]+$ ]]; then
-            echo "$time $imbalance" # This is the ONLY output to stdout
+            echo "$time $imbalance"
             echo "Done (${time}s, ${imbalance}%)" >&2
-            return 0 # Exit function with success, breaking the loop
+            return 0
         fi
 
-        # If we reach here, it failed. Print a message and wait before retrying.
         echo "FAILED. Retrying in $RETRY_DELAY seconds..." >&2
         sleep $RETRY_DELAY
     done
 }
 
-# --- hw2a Scalability 實驗 ---
 echo "=========================================="
 echo " Step 2: hw2a Strong Scaling (1-12 threads)"
 echo "=========================================="
@@ -93,7 +79,6 @@ echo "=========================================="
 HW2A_EXE="hw2a_best"
 HW2A_THREADS=(1 2 3 4 5 6 7 8 9 10 11 12)
 
-# Baseline for speedup calculation (1 thread)
 hw2a_baseline_time=0
 
 for num_threads in "${HW2A_THREADS[@]}"; do
@@ -119,7 +104,6 @@ for num_threads in "${HW2A_THREADS[@]}"; do
         avg_imbalance="0${avg_imbalance}"
     fi
     
-    # Calculate speedup and efficiency
     if [ $num_threads -eq 1 ]; then
         hw2a_baseline_time=$total_exec_time
         speedup="1.0000"
@@ -141,7 +125,6 @@ for num_threads in "${HW2A_THREADS[@]}"; do
 done
 
 
-# --- hw2b Scalability 實驗 ---
 echo ""
 echo "=========================================="
 echo " Step 3: hw2b Strong Scaling"
@@ -150,14 +133,10 @@ echo "=========================================="
 HW2B_EXE="hw2b_best"
 
 HW2B_CONFIGS=(
-    # 格式: "processes threads"
-    # 限制: n × c ≤ 48 且 c ≤ min(12, n)
-    
-    "1 12"   # 1×12 = 12 CPUs ✓
-    "2 12"   # 2×12 = 24 CPUs ✓
-    "3 12"   # 3×12 = 36 CPUs ✓
-    "4 12"   # 4×12 = 48 CPUs ✓
-    
+    "1 12"
+    "2 12"
+    "3 12"
+    "4 12"
     "48 1"
     "24 2"
     "16 3"
@@ -165,7 +144,6 @@ HW2B_CONFIGS=(
     "8 6"
 )
 
-# Baseline for speedup calculation
 hw2b_baseline_time=0
 hw2b_baseline_cores=0
 
@@ -196,7 +174,6 @@ for config in "${HW2B_CONFIGS[@]}"; do
         avg_imbalance="0${avg_imbalance}"
     fi
     
-    # Calculate speedup and efficiency (relative to first config)
     if [ $hw2b_baseline_cores -eq 0 ]; then
         hw2b_baseline_time=$total_exec_time
         hw2b_baseline_cores=$total_cores
@@ -204,7 +181,6 @@ for config in "${HW2B_CONFIGS[@]}"; do
         efficiency="100.00"
     else
         speedup=$(echo "scale=4; $hw2b_baseline_time / $total_exec_time" | bc)
-        # Efficiency relative to baseline cores
         cores_ratio=$(echo "scale=4; $total_cores / $hw2b_baseline_cores" | bc)
         efficiency=$(echo "scale=2; $speedup / $cores_ratio * 100" | bc)
     fi
@@ -220,7 +196,6 @@ for config in "${HW2B_CONFIGS[@]}"; do
     echo "$HW2B_EXE,$num_procs,$threads_per_proc,$total_cores,$total_exec_time,$avg_imbalance,$speedup,$efficiency,hw2b" >> $RESULT_FILE
 done
 
-# 清理臨時log
 rm -f "$TEMP_LOG"
 
 echo ""
@@ -228,7 +203,6 @@ echo "=========================================="
 echo " Scalability Results Summary"
 echo "=========================================="
 
-# 顯示結果表格
 column -t -s',' $RESULT_FILE
 
 echo ""

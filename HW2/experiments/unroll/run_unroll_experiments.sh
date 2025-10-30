@@ -1,10 +1,5 @@
 #!/bin/bash
-#================================================================
-# Unroll Experiments (All Testcases & New Output Format) - FIX 2
-# usage: ./run_unroll_experiments.sh 2>&1 | tee unroll_experiment_$(date +%Y%m%d_%H%M%S).log
-#================================================================
 
-# Configuration
 TESTCASE_DIR="../../testcases"
 OUTPUT_DIR="unroll_results_all_cases"
 RESULT_FILE="${OUTPUT_DIR}/summary_results.csv"
@@ -13,16 +8,13 @@ SCRIPT_DIR=$(pwd)
 COMPUTE_DIR=${SCRIPT_DIR/\/beegfs/}
 RETRY_DELAY=2
 
-# Check if testcase directory exists
 if [[ ! -d "$TESTCASE_DIR" ]]; then
     echo "Error: Testcase directory $TESTCASE_DIR not found!"
     exit 1
 fi
 
-# Create output directory
 mkdir -p $OUTPUT_DIR
 
-# Initialize CSV file header
 echo "Program,Unroll_Factor,Total_Execution_Time,Avg_Thread_Imbalance_Pct,Type" > $RESULT_FILE
 
 echo "=========================================="
@@ -47,7 +39,6 @@ fi
 echo "Found $TESTCASE_COUNT testcases to run for unroll experiments."
 echo ""
 
-# --- Function to run and parse results with infinite retry ---
 run_and_parse() {
     local exe=$1
     local testcase_file=$2
@@ -62,30 +53,25 @@ run_and_parse() {
         return 1
     fi
 
-    # Use an infinite loop to retry until success
     while true; do
         echo -n "  Running on $testcase_name... " >&2
 
-        # Execute command using compute-node-valid absolute path
         eval "$srun_args \"$COMPUTE_DIR/$exe\" \"${OUTPUT_DIR}/${exe}_${testcase_name}.png\" $TESTCASE_ARGS" > "$TEMP_LOG" 2>&1
         
         time=$(grep "Total Time:" "$TEMP_LOG" | head -1 | awk '{print $3}')
         imbalance=$(grep "Thread Imbalance:" "$TEMP_LOG" | head -1 | awk '{print $3}' | tr -d '%')
         
-        # If parsing is successful, we are done. Return success.
         if [[ "$time" =~ ^[0-9.]+$ && "$imbalance" =~ ^[0-9.]+$ ]]; then
-            echo "$time $imbalance" # This is the ONLY output to stdout
+            echo "$time $imbalance"
             echo "Done (${time}s, ${imbalance}%)" >&2
-            return 0 # Exit function with success, breaking the loop
+            return 0
         fi
 
-        # If we reach here, it failed. Print a message and wait before retrying.
         echo "FAILED. Retrying in $RETRY_DELAY seconds..." >&2
         sleep $RETRY_DELAY
     done
 }
 
-# --- hw2a Unroll Experiments ---
 echo "=========================================="
 echo " Step 2: Running Unroll Experiments for hw2a"
 echo "=========================================="
@@ -123,7 +109,6 @@ for exe in "${hw2a_targets[@]}"; do
     echo "$exe,$unroll_factor,$total_exec_time,$avg_imbalance,hw2a" >> $RESULT_FILE
 done
 
-# --- hw2b Unroll Experiments ---
 echo ""
 echo "=========================================="
 echo " Step 3: Running Unroll Experiments for hw2b"
@@ -162,7 +147,6 @@ for exe in "${hw2b_targets[@]}"; do
     echo "$exe,$unroll_factor,$total_exec_time,$avg_imbalance,hw2b" >> $RESULT_FILE
 done
 
-# Clean up temp file
 rm -f "$TEMP_LOG"
 
 echo ""
@@ -170,14 +154,11 @@ echo "=========================================="
 echo " Results Summary"
 echo "=========================================="
 
-# Display results table
 column -t -s',' $RESULT_FILE
 
-# Find best performers
 echo ""
 echo "Best hw2a unroll config: $(tail -n +2 $RESULT_FILE | grep ",hw2a" | sort -t',' -k3 -n | head -1 | cut -d',' -f1,2,3)"
 echo "Best hw2b unroll config: $(tail -n +2 $RESULT_FILE | grep ",hw2b" | sort -t',' -k3 -n | head -1 | cut -d',' -f1,2,3)"
 
 echo ""
 echo "✓ Done! Summary results saved to: $RESULT_FILE"
-
