@@ -33,3 +33,8 @@ hw2b_prof: hw2b.cc
 .PHONY: clean
 clean:
 	rm -f $(TARGETS) $(PROF_TARGETS)
+
+# List all targets
+.PHONY: list
+list:
+	@echo "hw2 targets: $(PROF_TARGETS)"

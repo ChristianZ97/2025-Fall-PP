@@ -10,3 +10,4 @@ srun -n4 -c12 ./hw2b_prof my_fast01_b.png 2602 -3 0.2 -3 0.2 979 2355
 
 ./run_unroll_experiments.sh 2>&1 | tee unroll_experiment_$(date +%Y%m%d_%H%M%S).log
 ./run_load_balance_experiments.sh 2>&1 | tee lb_experiment_$(date +%Y%m%d_%H%M%S).log
+./run_scalability_experiments.sh 2>&1 | tee lb_experiment_$(date +%Y%m%d_%H%M%S).log

@@ -91,7 +91,7 @@ echo " Step 2: hw2a Strong Scaling (1-12 threads)"
 echo "=========================================="
 
 HW2A_EXE="hw2a_best"
-HW2A_THREADS=(1 2 4 6 8 10 12 14 16 18)
+HW2A_THREADS=(1 2 3 4 5 6 7 8 9 10 11 12)
 
 # Baseline for speedup calculation (1 thread)
 hw2a_baseline_time=0
@@ -114,6 +114,10 @@ for num_threads in "${HW2A_THREADS[@]}"; do
     done
 
     avg_imbalance=$(echo "scale=4; $total_imbalance / $TESTCASE_COUNT" | bc)
+
+    if [[ $avg_imbalance == .* ]]; then
+        avg_imbalance="0${avg_imbalance}"
+    fi
     
     # Calculate speedup and efficiency
     if [ $num_threads -eq 1 ]; then
@@ -145,26 +149,21 @@ echo "=========================================="
 
 HW2B_EXE="hw2b_best"
 
-# 定義測試配置: (num_processes, threads_per_process)
-# 選項1: 固定總 cores = 48
 HW2B_CONFIGS=(
-    "1 48"
-    "2 24"
-    "3 16"
-    "4 12"
-    "6 8"
-    "1 12"
-    "2 12"
-    "3 12"
-    "4 12"
+    # 格式: "processes threads"
+    # 限制: n × c ≤ 48 且 c ≤ min(12, n)
+    
+    "1 12"   # 1×12 = 12 CPUs ✓
+    "2 12"   # 2×12 = 24 CPUs ✓
+    "3 12"   # 3×12 = 36 CPUs ✓
+    "4 12"   # 4×12 = 48 CPUs ✓
+    
+    "48 1"
+    "24 2"
+    "16 3"
+    "12 4"
+    "8 6"
 )
-
-# 或者選項2: 改變總 cores（如果你想測試 weak scaling）
-# HW2B_CONFIGS=(
-#     "1 12"
-#     "2 12"
-#     "4 12"
-# )
 
 # Baseline for speedup calculation
 hw2b_baseline_time=0
@@ -192,6 +191,10 @@ for config in "${HW2B_CONFIGS[@]}"; do
     done
 
     avg_imbalance=$(echo "scale=4; $total_imbalance / $TESTCASE_COUNT" | bc)
+
+    if [[ $avg_imbalance == .* ]]; then
+        avg_imbalance="0${avg_imbalance}"
+    fi
     
     # Calculate speedup and efficiency (relative to first config)
     if [ $hw2b_baseline_cores -eq 0 ]; then
