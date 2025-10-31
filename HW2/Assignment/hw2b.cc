@@ -103,7 +103,6 @@ int main(int argc, char *argv[]) {
     const int base_chunk_size = height / numtasks;
     const int remainder = height % numtasks;
     const int my_count = (my_rank < remainder) ? base_chunk_size + 1 : base_chunk_size;
-    const int my_start = (my_rank * base_chunk_size + std::min(my_rank, remainder));
 
 #ifdef PROFILING
     NVTX_POP();  // end MPI_Setup
