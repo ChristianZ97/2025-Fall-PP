@@ -87,16 +87,19 @@ typedef struct {
     double right;  // Real part end (x1)
     double lower;  // Imaginary part start (y0)
     double upper;  // Imaginary part end (y1)
+
 #ifdef PROFILING
     double compute_time;
     double sync_time;
 #endif
+
 } ThreadArg;
 
 void write_png(const char *filename, int iters, int width, int height, const int *buffer);
 void *local_mandelbrot(void *argv);
 
 int main(int argc, char *argv[]) {
+
 #ifdef PROFILING
     double total_start_time, temp_start, io_time = 0.0;
     total_start_time = get_wall_time();
@@ -149,10 +152,12 @@ int main(int argc, char *argv[]) {
         t_args[i].right = right;
         t_args[i].lower = lower;
         t_args[i].upper = upper;
+
 #ifdef PROFILING
         t_args[i].compute_time = 0.0;
         t_args[i].sync_time = 0.0;
 #endif
+
         pthread_create(&threads[i], NULL, local_mandelbrot, (void *)&t_args[i]);
     }
 
@@ -230,10 +235,12 @@ int main(int argc, char *argv[]) {
     printf("  Thread Imbalance:    %.2f%% ((max-min)/max)\n", imbalance);
     printf("==========================================\n");
 #endif
+
     return 0;
 }
 
 void *local_mandelbrot(void *argv) {
+
     ThreadArg *t_arg = (ThreadArg *)argv;
     const int iters = t_arg->iters;
     const int width = t_arg->width;
@@ -252,6 +259,7 @@ void *local_mandelbrot(void *argv) {
 #endif
 
     while (1) {
+
 #ifdef PROFILING
         double sync_start = get_wall_time();
 #endif
@@ -259,6 +267,7 @@ void *local_mandelbrot(void *argv) {
         const int my_start_row = next_row;
         next_row += CHUNK_SIZE;
         pthread_mutex_unlock(&task_mutex);
+
 #ifdef PROFILING
         local_sync_time += get_wall_time() - sync_start;
 #endif
@@ -372,6 +381,7 @@ void *local_mandelbrot(void *argv) {
 #ifdef PROFILING
         local_compute_time += get_wall_time() - compute_start;
 #endif
+
     }
 
 #ifdef PROFILING

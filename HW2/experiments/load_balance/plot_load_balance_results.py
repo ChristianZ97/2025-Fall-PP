@@ -94,7 +94,7 @@ if not df_hw2a.empty:
     
     ax.set_xlabel("Thread Imbalance (%)", fontsize=18, fontweight="bold")
     ax.set_ylabel("Total Execution Time (seconds)", fontsize=18, fontweight="bold")
-    ax.set_title("hw2a (pthread) Load Balancing Strategies", fontsize=24,
+    ax.set_title("hw2a (Pthread) Load Balancing Strategies", fontsize=24,
                  fontweight="bold", pad=20)
     ax.grid(True, linestyle="--", alpha=0.3, zorder=0)
     ax.tick_params(labelsize=14)

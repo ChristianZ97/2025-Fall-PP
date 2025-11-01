@@ -174,7 +174,7 @@ lines_handles = [line_a[0], line_b[0]]
 
 all_handles = bars_handles + lines_handles
 
-all_labels = ["hw2a Time", "hw2b Time", "hw2a Speedup", "hw2b Speedup"]
+all_labels = ["hw2a (Pthread) Time", "hw2b (MPI+OpenMP) Time", "hw2a (Pthread) Speedup", "hw2b (MPI+OpenMP) Speedup"]
 
 ax1.legend(all_handles, all_labels, loc="upper right", fontsize=12, framealpha=0.95)
 
@@ -196,7 +196,7 @@ print("\n" + "=" * 70)
 print("Summary Statistics")
 print("=" * 70)
 
-print("\nhw2a (pthread):")
+print("\nhw2a (Pthread):")
 
 print(f" Baseline (unroll=1): {baseline_hw2a:.2f}s")
 

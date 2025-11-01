@@ -129,107 +129,107 @@ int main(int argc, char *argv[]) {
 
     const __m128d four = _mm_set1_pd(4.0);
     const __m128d one = _mm_set1_pd(1.0);
+
 #pragma omp parallel num_threads(num_threads)
-    {
 #pragma omp for schedule(dynamic, 1) nowait
-        for (int local_j = 0; local_j < my_count; ++local_j) {
-            const int j = my_rank + local_j * numtasks;
-            const double y0 = j * y_scale + lower;
-            const __m128d y0_vec = _mm_set1_pd(y0);
 
-            for (int i = 0; i <= width - 8; i += 8) {
-                __m128d repeats_vec_0 = _mm_setzero_pd();
-                __m128d repeats_vec_1 = _mm_setzero_pd();
-                __m128d repeats_vec_2 = _mm_setzero_pd();
-                __m128d repeats_vec_3 = _mm_setzero_pd();
+    for (int local_j = 0; local_j < my_count; ++local_j) {
+        const int j = my_rank + local_j * numtasks;
+        const double y0 = j * y_scale + lower;
+        const __m128d y0_vec = _mm_set1_pd(y0);
 
-                __m128d x_vec_0 = _mm_setzero_pd();
-                __m128d y_vec_0 = _mm_setzero_pd();
-                __m128d x_vec_1 = _mm_setzero_pd();
-                __m128d y_vec_1 = _mm_setzero_pd();
-                __m128d x_vec_2 = _mm_setzero_pd();
-                __m128d y_vec_2 = _mm_setzero_pd();
-                __m128d x_vec_3 = _mm_setzero_pd();
-                __m128d y_vec_3 = _mm_setzero_pd();
+        for (int i = 0; i <= width - 8; i += 8) {
+            __m128d repeats_vec_0 = _mm_setzero_pd();
+            __m128d repeats_vec_1 = _mm_setzero_pd();
+            __m128d repeats_vec_2 = _mm_setzero_pd();
+            __m128d repeats_vec_3 = _mm_setzero_pd();
 
-                const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
-                const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
-                const __m128d x0_vec_2 = _mm_setr_pd((i + 4) * x_scale + left, (i + 5) * x_scale + left);
-                const __m128d x0_vec_3 = _mm_setr_pd((i + 6) * x_scale + left, (i + 7) * x_scale + left);
+            __m128d x_vec_0 = _mm_setzero_pd();
+            __m128d y_vec_0 = _mm_setzero_pd();
+            __m128d x_vec_1 = _mm_setzero_pd();
+            __m128d y_vec_1 = _mm_setzero_pd();
+            __m128d x_vec_2 = _mm_setzero_pd();
+            __m128d y_vec_2 = _mm_setzero_pd();
+            __m128d x_vec_3 = _mm_setzero_pd();
+            __m128d y_vec_3 = _mm_setzero_pd();
 
-                for (int r = 0; r < iters; ++r) {
-                    __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);
-                    __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);
-                    __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);
-                    __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);
-                    __m128d x2_2 = _mm_mul_pd(x_vec_2, x_vec_2);
-                    __m128d y2_2 = _mm_mul_pd(y_vec_2, y_vec_2);
-                    __m128d x2_3 = _mm_mul_pd(x_vec_3, x_vec_3);
-                    __m128d y2_3 = _mm_mul_pd(y_vec_3, y_vec_3);
+            const __m128d x0_vec_0 = _mm_setr_pd(i * x_scale + left, (i + 1) * x_scale + left);
+            const __m128d x0_vec_1 = _mm_setr_pd((i + 2) * x_scale + left, (i + 3) * x_scale + left);
+            const __m128d x0_vec_2 = _mm_setr_pd((i + 4) * x_scale + left, (i + 5) * x_scale + left);
+            const __m128d x0_vec_3 = _mm_setr_pd((i + 6) * x_scale + left, (i + 7) * x_scale + left);
 
-                    __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
-                    __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);
-                    __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
-                    __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);
-                    __m128d len_sq_2 = _mm_add_pd(x2_2, y2_2);
-                    __m128d cmp_2 = _mm_cmplt_pd(len_sq_2, four);
-                    __m128d len_sq_3 = _mm_add_pd(x2_3, y2_3);
-                    __m128d cmp_3 = _mm_cmplt_pd(len_sq_3, four);
+            for (int r = 0; r < iters; ++r) {
+                __m128d x2_0 = _mm_mul_pd(x_vec_0, x_vec_0);
+                __m128d y2_0 = _mm_mul_pd(y_vec_0, y_vec_0);
+                __m128d x2_1 = _mm_mul_pd(x_vec_1, x_vec_1);
+                __m128d y2_1 = _mm_mul_pd(y_vec_1, y_vec_1);
+                __m128d x2_2 = _mm_mul_pd(x_vec_2, x_vec_2);
+                __m128d y2_2 = _mm_mul_pd(y_vec_2, y_vec_2);
+                __m128d x2_3 = _mm_mul_pd(x_vec_3, x_vec_3);
+                __m128d y2_3 = _mm_mul_pd(y_vec_3, y_vec_3);
 
-                    repeats_vec_0 = _mm_add_pd(repeats_vec_0, _mm_and_pd(cmp_0, one));
-                    repeats_vec_1 = _mm_add_pd(repeats_vec_1, _mm_and_pd(cmp_1, one));
-                    repeats_vec_2 = _mm_add_pd(repeats_vec_2, _mm_and_pd(cmp_2, one));
-                    repeats_vec_3 = _mm_add_pd(repeats_vec_3, _mm_and_pd(cmp_3, one));
+                __m128d len_sq_0 = _mm_add_pd(x2_0, y2_0);
+                __m128d cmp_0 = _mm_cmplt_pd(len_sq_0, four);
+                __m128d len_sq_1 = _mm_add_pd(x2_1, y2_1);
+                __m128d cmp_1 = _mm_cmplt_pd(len_sq_1, four);
+                __m128d len_sq_2 = _mm_add_pd(x2_2, y2_2);
+                __m128d cmp_2 = _mm_cmplt_pd(len_sq_2, four);
+                __m128d len_sq_3 = _mm_add_pd(x2_3, y2_3);
+                __m128d cmp_3 = _mm_cmplt_pd(len_sq_3, four);
 
-                    const int mask_0 = _mm_movemask_pd(cmp_0);
-                    const int mask_1 = _mm_movemask_pd(cmp_1);
-                    const int mask_2 = _mm_movemask_pd(cmp_2);
-                    const int mask_3 = _mm_movemask_pd(cmp_3);
-                    if (!mask_0 && !mask_1 && !mask_2 && !mask_3) break;
+                repeats_vec_0 = _mm_add_pd(repeats_vec_0, _mm_and_pd(cmp_0, one));
+                repeats_vec_1 = _mm_add_pd(repeats_vec_1, _mm_and_pd(cmp_1, one));
+                repeats_vec_2 = _mm_add_pd(repeats_vec_2, _mm_and_pd(cmp_2, one));
+                repeats_vec_3 = _mm_add_pd(repeats_vec_3, _mm_and_pd(cmp_3, one));
 
-                    __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
-                    y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
-                    x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
+                const int mask_0 = _mm_movemask_pd(cmp_0);
+                const int mask_1 = _mm_movemask_pd(cmp_1);
+                const int mask_2 = _mm_movemask_pd(cmp_2);
+                const int mask_3 = _mm_movemask_pd(cmp_3);
+                if (!mask_0 && !mask_1 && !mask_2 && !mask_3) break;
 
-                    __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
-                    y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
-                    x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
+                __m128d xy_0 = _mm_mul_pd(x_vec_0, y_vec_0);
+                y_vec_0 = _mm_add_pd(_mm_add_pd(xy_0, xy_0), y0_vec);
+                x_vec_0 = _mm_add_pd(_mm_sub_pd(x2_0, y2_0), x0_vec_0);
 
-                    __m128d xy_2 = _mm_mul_pd(x_vec_2, y_vec_2);
-                    y_vec_2 = _mm_add_pd(_mm_add_pd(xy_2, xy_2), y0_vec);
-                    x_vec_2 = _mm_add_pd(_mm_sub_pd(x2_2, y2_2), x0_vec_2);
+                __m128d xy_1 = _mm_mul_pd(x_vec_1, y_vec_1);
+                y_vec_1 = _mm_add_pd(_mm_add_pd(xy_1, xy_1), y0_vec);
+                x_vec_1 = _mm_add_pd(_mm_sub_pd(x2_1, y2_1), x0_vec_1);
 
-                    __m128d xy_3 = _mm_mul_pd(x_vec_3, y_vec_3);
-                    y_vec_3 = _mm_add_pd(_mm_add_pd(xy_3, xy_3), y0_vec);
-                    x_vec_3 = _mm_add_pd(_mm_sub_pd(x2_3, y2_3), x0_vec_3);
-                }
+                __m128d xy_2 = _mm_mul_pd(x_vec_2, y_vec_2);
+                y_vec_2 = _mm_add_pd(_mm_add_pd(xy_2, xy_2), y0_vec);
+                x_vec_2 = _mm_add_pd(_mm_sub_pd(x2_2, y2_2), x0_vec_2);
 
-                __m128i int_vec_0 = _mm_cvtpd_epi32(repeats_vec_0);
-                __m128i int_vec_1 = _mm_cvtpd_epi32(repeats_vec_1);
-                __m128i int_vec_2 = _mm_cvtpd_epi32(repeats_vec_2);
-                __m128i int_vec_3 = _mm_cvtpd_epi32(repeats_vec_3);
-
-                int *image_ptr = &image[local_j * width + i];
-                _mm_storel_epi64((__m128i *)image_ptr, int_vec_0);
-                _mm_storel_epi64((__m128i *)(image_ptr + 2), int_vec_1);
-                _mm_storel_epi64((__m128i *)(image_ptr + 4), int_vec_2);
-                _mm_storel_epi64((__m128i *)(image_ptr + 6), int_vec_3);
+                __m128d xy_3 = _mm_mul_pd(x_vec_3, y_vec_3);
+                y_vec_3 = _mm_add_pd(_mm_add_pd(xy_3, xy_3), y0_vec);
+                x_vec_3 = _mm_add_pd(_mm_sub_pd(x2_3, y2_3), x0_vec_3);
             }
 
-            for (int i = (width / 8) * 8; i < width; ++i) {
-                const double x0 = i * x_scale + left;
-                double x = 0, y = 0;
-                int repeats = 0;
-                for (; repeats < iters; ++repeats) {
-                    const double x2 = x * x, y2 = y * y;
-                    if (x2 + y2 >= 4) break;
-                    y = 2 * x * y + y0;
-                    x = x2 - y2 + x0;
-                }
-                image[local_j * width + i] = repeats;
-            }
+            __m128i int_vec_0 = _mm_cvtpd_epi32(repeats_vec_0);
+            __m128i int_vec_1 = _mm_cvtpd_epi32(repeats_vec_1);
+            __m128i int_vec_2 = _mm_cvtpd_epi32(repeats_vec_2);
+            __m128i int_vec_3 = _mm_cvtpd_epi32(repeats_vec_3);
+
+            int *image_ptr = &image[local_j * width + i];
+            _mm_storel_epi64((__m128i *)image_ptr, int_vec_0);
+            _mm_storel_epi64((__m128i *)(image_ptr + 2), int_vec_1);
+            _mm_storel_epi64((__m128i *)(image_ptr + 4), int_vec_2);
+            _mm_storel_epi64((__m128i *)(image_ptr + 6), int_vec_3);
         }
-    }  // end of #pragma omp parallel
+
+        for (int i = (width / 8) * 8; i < width; ++i) {
+            const double x0 = i * x_scale + left;
+            double x = 0, y = 0;
+            int repeats = 0;
+            for (; repeats < iters; ++repeats) {
+                const double x2 = x * x, y2 = y * y;
+                if (x2 + y2 >= 4) break;
+                y = 2 * x * y + y0;
+                x = x2 - y2 + x0;
+            }
+            image[local_j * width + i] = repeats;
+        }
+    }
 
 #ifdef PROFILING
     NVTX_POP();  // end Compute_Mandelbrot
@@ -269,9 +269,8 @@ int main(int argc, char *argv[]) {
         free(temp_image);
         free(recvcounts);
         free(displacements);
-    } else {
-        MPI_Gatherv(image, width * my_count, MPI_INT, NULL, NULL, NULL, MPI_INT, 0, MPI_COMM_WORLD);
-    }
+
+    } else MPI_Gatherv(image, width * my_count, MPI_INT, NULL, NULL, NULL, MPI_INT, 0, MPI_COMM_WORLD);
 
 #ifdef PROFILING
     comm_time += MPI_Wtime() - temp_start;
@@ -351,6 +350,7 @@ int main(int argc, char *argv[]) {
         printf("==========================================\n");
     }
 #endif
+
     MPI_Finalize();
     return 0;
 }

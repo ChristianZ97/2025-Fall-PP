@@ -103,6 +103,7 @@ int main(int argc, char *argv[]) {
     const int base_chunk_size = height / numtasks;
     const int remainder = height % numtasks;
     const int my_count = (my_rank < remainder) ? base_chunk_size + 1 : base_chunk_size;
+    const int my_start = (my_rank * base_chunk_size + std::min(my_rank, remainder));
 
 #ifdef PROFILING
     NVTX_POP();  // end MPI_Setup
@@ -129,10 +130,9 @@ int main(int argc, char *argv[]) {
 
     const __m128d four = _mm_set1_pd(4.0);
     const __m128d one = _mm_set1_pd(1.0);
-
 #pragma omp parallel num_threads(num_threads)
+{
 #pragma omp for schedule(dynamic, 1) nowait
-
     for (int local_j = 0; local_j < my_count; ++local_j) {
         const int j = my_rank + local_j * numtasks;
         const double y0 = j * y_scale + lower;
@@ -230,6 +230,7 @@ int main(int argc, char *argv[]) {
             image[local_j * width + i] = repeats;
         }
     }
+}  // end of #pragma omp parallel
 
 #ifdef PROFILING
     NVTX_POP();  // end Compute_Mandelbrot
@@ -269,8 +270,9 @@ int main(int argc, char *argv[]) {
         free(temp_image);
         free(recvcounts);
         free(displacements);
-
-    } else MPI_Gatherv(image, width * my_count, MPI_INT, NULL, NULL, NULL, MPI_INT, 0, MPI_COMM_WORLD);
+    } else {
+        MPI_Gatherv(image, width * my_count, MPI_INT, NULL, NULL, NULL, MPI_INT, 0, MPI_COMM_WORLD);
+    }
 
 #ifdef PROFILING
     comm_time += MPI_Wtime() - temp_start;
@@ -350,7 +352,6 @@ int main(int argc, char *argv[]) {
         printf("==========================================\n");
     }
 #endif
-
     MPI_Finalize();
     return 0;
 }
