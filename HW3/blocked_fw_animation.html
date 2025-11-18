@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Blocked Floyd-Warshall 三階段動畫 (隨機權重, 可調 V, B)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 16px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    #desc {
+      margin-bottom: 12px;
+      padding: 8px 10px;
+      background: #f7f7f7;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+    }
+
+    .controls {
+      margin-bottom: 8px;
+    }
+
+    .controls button,
+    .controls input {
+      margin-right: 6px;
+      padding: 4px 8px;
+      font-size: 13px;
+    }
+
+    .controls label {
+      font-size: 13px;
+      margin-right: 4px;
+    }
+
+    .controls span {
+      margin-left: 8px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    #matrix {
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+
+    #matrix td {
+      width: 46px;
+      height: 46px;
+      text-align: center;
+      border: 1px solid #ccc;
+      font-size: 12px;
+      position: relative;
+      transition: background-color 0.12s, opacity 0.12s, box-shadow 0.12s;
+    }
+
+    /* block 邊界 (依據目前 B 動態加上) */
+    .block-top {
+      border-top: 3px solid #000;
+    }
+    .block-left {
+      border-left: 3px solid #000;
+    }
+    .block-bottom-last {
+      border-bottom: 3px solid #000;
+    }
+    .block-right-last {
+      border-right: 3px solid #000;
+    }
+
+    /*
+      顏色對應三個 phase：
+      - Phase 1: pivot block，用灰色
+      - Phase 2: pivot row / column，用藍色
+      - Phase 3: 其他 blocks，用紅色
+    */
+    .pivot {
+      background-color: #e0e0e0;
+      box-shadow: inset 0 0 0 2px #777777;
+    }
+    .rowcol {
+      background-color: #e0ecff;
+      box-shadow: inset 0 0 0 2px #3366cc;
+    }
+    .other {
+      background-color: #ffd6d6;
+      box-shadow: inset 0 0 0 2px #cc3333;
+    }
+
+    .inactive {
+      opacity: 0.25;
+    }
+
+    #legend {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    #legend span.box {
+      display: inline-block;
+      width: 18px;
+      height: 12px;
+      margin: 0 4px;
+      vertical-align: middle;
+      border: 1px solid #999;
+    }
+    #legend .pivot-box {
+      background-color: #e0e0e0;
+    }
+    #legend .rowcol-box {
+      background-color: #e0ecff;
+    }
+    #legend .other-box {
+      background-color: #ffd6d6;
+    }
+
+    #formula {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #444;
+      background: #fafafa;
+      border-radius: 4px;
+      border: 1px dashed #ccc;
+      padding: 8px 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Blocked Floyd-Warshall 動畫 (隨機權重, 可調 V, B)</h1>
+
+  <div id="desc">
+    這個小工具示範作業規格中的 Blocked Floyd-Warshall：預設 V = 6，使用者可以輸入頂點數 V 與 blocking factor B。<br>
+    每個 cell 顯示目前的距離矩陣權重，隨著每個 round、每個 phase 套用 Blocked Floyd-Warshall 公式而更新。
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn">上一個步驟</button>
+    <button id="nextBtn">下一個步驟</button>
+    <button id="playBtn">自動播放</button>
+    <button id="resetBtn">重新隨機矩陣</button>
+
+    <!-- 新增：可自訂 V -->
+    <label for="vInput">V：</label>
+    <input id="vInput" type="number" min="1" max="16" value="6">
+    <button id="applyVBtn">套用 V</button>
+
+    <label for="bInput">B：</label>
+    <input id="bInput" type="number" min="1" max="6" value="2">
+    <button id="applyBBtn">套用 B</button>
+
+    <span id="status"></span>
+  </div>
+
+  <table id="matrix"></table>
+
+  <div id="legend">
+    <span class="box pivot-box"></span> Phase 1：pivot block　
+    <span class="box rowcol-box"></span> Phase 2：pivot row / pivot column　
+    <span class="box other-box"></span> Phase 3：其他 blocks
+  </div>
+
+  <div id="formula">
+    Blocked Floyd-Warshall 將整個 \(V \times V\) 距離矩陣切成 \(B \times B\) 的 blocks，對每個 block-index \(k\) 進行一個 round：<br>
+    Phase 1：在 pivot block 內，使用中繼點 \(k\) 所對應的一組頂點更新。<br>
+    Phase 2：使用 pivot block 已更新結果，更新 pivot row / pivot column。<br>
+    Phase 3：再使用 pivot row / column 的結果，更新所有其他 blocks。<br>
+    每次 relax 的公式為：\( d(i,j) \leftarrow \min \big( d(i,j),\ d(i,k) + d(k,j) \big) \)。
+  </div>
+
+  <script>
+    // ===== 參數設定 =====
+    let V = 6;               // 頂點數可由使用者設定
+    const INF = 1e9;         // 代表「沒有路徑」
+
+    const table = document.getElementById("matrix");
+    const statusSpan = document.getElementById("status");
+    const descDiv = document.getElementById("desc");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const playBtn = document.getElementById("playBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const bInput = document.getElementById("bInput");
+    const applyBBtn = document.getElementById("applyBBtn");
+    const vInput = document.getElementById("vInput");
+    const applyVBtn = document.getElementById("applyVBtn");
+
+    // 目前的 B 與 round 數
+    let B = 2;
+    let numBlocks = Math.ceil(V / B);
+    let totalRounds = numBlocks;
+
+    // 距離矩陣：distInit 是初始隨機圖，dist 是演算法正在更新的版本
+    let distInit = [];
+    let dist = [];
+
+    // 步驟序列 (round, phase)
+    let steps = [];
+    let currentStep = 0;
+    let playing = false;
+    let timerId = null;
+
+    // ===== 工具函式 =====
+    function cloneMatrix(mat) {
+      return mat.map(row => row.slice());
+    }
+
+    function formatCellValue(val) {
+      return (val >= INF / 2) ? "∞" : String(val);
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // 隨機產生 adjacency matrix
+    function generateRandomMatrix() {
+      distInit = new Array(V);
+      for (let i = 0; i < V; i++) {
+        distInit[i] = new Array(V);
+        for (let j = 0; j < V; j++) {
+          if (i === j) {
+            distInit[i][j] = 0;
+          } else {
+            // 以一定機率沒有邊 (INF)，否則給 1~9 的隨機權重
+            const noEdge = Math.random() < 0.3; // 30% 沒有邊
+            distInit[i][j] = noEdge ? INF : randomInt(1, 9);
+          }
+        }
+      }
+      dist = cloneMatrix(distInit);
+    }
+
+    // 建立 / 重建 VxV 表格
+    function buildTable() {
+      table.innerHTML = "";
+      for (let i = 0; i < V; i++) {
+        const tr = document.createElement("tr");
+        for (let j = 0; j < V; j++) {
+          const td = document.createElement("td");
+          td.dataset.i = i;
+          td.dataset.j = j;
+          td.textContent = formatCellValue(dist[i][j]);
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+      updateBlockBorders();
+    }
+
+    // 依照目前 B 更新 block 邊界樣式
+    function updateBlockBorders() {
+      const tds = table.getElementsByTagName("td");
+      for (const td of tds) {
+        td.classList.remove("block-top", "block-left", "block-bottom-last", "block-right-last");
+      }
+
+      for (let i = 0; i < V; i++) {
+        for (let j = 0; j < V; j++) {
+          const td = table.rows[i].cells[j];
+          if (i % B === 0) td.classList.add("block-top");
+          if (j % B === 0) td.classList.add("block-left");
+          if (i === V - 1) td.classList.add("block-bottom-last");
+          if (j === V - 1) td.classList.add("block-right-last");
+        }
+      }
+    }
+
+    // 依照目前 B 建立 (round, phase) 步驟序列
+    function buildSteps() {
+      steps = [];
+      numBlocks = Math.ceil(V / B);
+      totalRounds = numBlocks;
+
+      for (let kBlock = 0; kBlock < totalRounds; kBlock++) {
+        // Phase 1: pivot block
+        steps.push({
+          round: kBlock,
+          phase: 1,
+          typeOfBlock: (I, J) => {
+            if (I === kBlock && J === kBlock) return "pivot";
+            return "inactive";
+          },
+          message: `Round ${kBlock + 1} / ${totalRounds} — Phase 1：更新 pivot block D(${kBlock}, ${kBlock})。`
+        });
+
+        // Phase 2: pivot row / column
+        steps.push({
+          round: kBlock,
+          phase: 2,
+          typeOfBlock: (I, J) => {
+            // Phase 1 的結果 (pivot block) 在 Phase 2 不再上色
+            if (I === kBlock && J === kBlock) return "inactive";
+            // 只對 pivot row / column (但不含 pivot block) 做藍色 highlight
+            if (I === kBlock || J === kBlock) return "rowcol";
+            return "inactive";
+          },
+          message: `Round ${kBlock + 1} / ${totalRounds} — Phase 2：更新 pivot row / column (索引 ${kBlock})，pivot block 已在 Phase 1 完成更新。`
+        });
+
+        // Phase 3: other blocks
+        steps.push({
+          round: kBlock,
+          phase: 3,
+          typeOfBlock: (I, J) => {
+            if (I === kBlock || J === kBlock) return "inactive";
+            return "other";
+          },
+          message: `Round ${kBlock + 1} / ${totalRounds} — Phase 3：更新其他 blocks，使用 pivot row / column 作為中繼。`
+        });
+      }
+
+      // 如果 V 不是 B 的整數倍，最後一個 round 會自然只涵蓋剩下那些頂點
+    }
+
+    // 重置演算法狀態 (但保留目前 B 與 V)
+    function resetAlgorithm() {
+      dist = cloneMatrix(distInit);
+      currentStep = 0;
+      renderStep();
+    }
+
+    // Floyd-Warshall relax
+    function relax(i, j, k) {
+      const dij = dist[i][j];
+      const dik = dist[i][k];
+      const dkj = dist[k][j];
+      if (dik < INF / 2 && dkj < INF / 2) {
+        const cand = dik + dkj;
+        if (cand < dij) {
+          dist[i][j] = cand;
+        }
+      }
+    }
+
+    // 針對「某個 round 的某個 phase」做一次 Blocked FW 更新
+    function applyStepUpdate(step) {
+      const kBlock = step.round;
+      const phase = step.phase;
+
+      const kStart = kBlock * B;
+      const kEnd = Math.min(kStart + B, V);
+
+      if (phase === 1) {
+        // Phase 1: 只更新 pivot block (kBlock, kBlock)
+        for (let k = kStart; k < kEnd; k++) {
+          for (let i = kStart; i < kEnd; i++) {
+            for (let j = kStart; j < kEnd; j++) {
+              relax(i, j, k);
+            }
+          }
+        }
+      } else if (phase === 2) {
+        // Phase 2: 更新 pivot row & pivot column (排除 pivot block 中已在 Phase 1 處理者)
+        for (let k = kStart; k < kEnd; k++) {
+          // pivot row (I = kBlock, J != kBlock)
+          for (let i = kStart; i < kEnd; i++) {
+            for (let j = 0; j < V; j++) {
+              if (j >= kStart && j < kEnd) continue; // 這部分已在 Phase 1 處理
+              relax(i, j, k);
+            }
+          }
+          // pivot column (J = kBlock, I != kBlock)
+          for (let i = 0; i < V; i++) {
+            if (i >= kStart && i < kEnd) continue; // 已在 pivot block
+            for (let j = kStart; j < kEnd; j++) {
+              relax(i, j, k);
+            }
+          }
+        }
+      } else if (phase === 3) {
+        // Phase 3: 更新其他 blocks (不在 pivot row / column 上)
+        for (let k = kStart; k < kEnd; k++) {
+          for (let i = 0; i < V; i++) {
+            if (i >= kStart && i < kEnd) continue; // 排除 pivot row (I=kBlock)
+            for (let j = 0; j < V; j++) {
+              if (j >= kStart && j < kEnd) continue; // 排除 pivot column (J=kBlock)
+              relax(i, j, k);
+            }
+          }
+        }
+      }
+    }
+
+    // 根據目前步驟，刷新整個 VxV 的著色與文字
+    function renderStep() {
+      if (steps.length === 0) {
+        statusSpan.textContent = "尚未建立步驟，請確認 V、B 是否有效。";
+        return;
+      }
+      const step = steps[currentStep];
+      const { round, phase, message } = step;
+
+      // 更新 cell 數值與著色
+      const tds = table.getElementsByTagName("td");
+      for (const td of tds) {
+        const i = parseInt(td.dataset.i, 10);
+        const j = parseInt(td.dataset.j, 10);
+        const I = Math.floor(i / B);
+        const J = Math.floor(j / B);
+
+        td.textContent = formatCellValue(dist[i][j]);
+
+        td.classList.remove("pivot", "rowcol", "other", "inactive");
+        const type = step.typeOfBlock(I, J);
+        if (type === "pivot") td.classList.add("pivot");
+        else if (type === "rowcol") td.classList.add("rowcol");
+        else if (type === "other") td.classList.add("other");
+        else td.classList.add("inactive");
+      }
+
+      statusSpan.textContent = `目前步驟：Round ${round + 1}, Phase ${phase}（共 ${steps.length} 步）`;
+      descDiv.innerHTML =
+        `這個動畫示範 Blocked Floyd-Warshall：目前 V = ${V}，B = ${B}，共有 ` +
+        `${totalRounds} 個 round，每個 round 有 Phase 1 / 2 / 3。<br>` +
+        message + ` 每完成一輪 round，距離矩陣會更接近最終的 all-pairs shortest paths。`;
+    }
+
+    // ===== 步驟切換控制 =====
+    function goToStep(targetIdx) {
+      if (steps.length === 0) return;
+      if (targetIdx < 0) targetIdx = 0;
+      if (targetIdx >= steps.length) targetIdx = steps.length - 1;
+
+      if (targetIdx === currentStep) {
+        renderStep();
+        return;
+      }
+
+      // 若往前 (step 變大)，只需套用中間的 updates
+      if (targetIdx > currentStep) {
+        for (let i = currentStep + 1; i <= targetIdx; i++) {
+          applyStepUpdate(steps[i]);
+        }
+      } else {
+        // 若往回，重置矩陣，從頭重播到 targetIdx
+        dist = cloneMatrix(distInit);
+        for (let i = 0; i <= targetIdx; i++) {
+          applyStepUpdate(steps[i]);
+        }
+      }
+
+      currentStep = targetIdx;
+      renderStep();
+    }
+
+    prevBtn.addEventListener("click", () => {
+      goToStep(currentStep - 1);
+    });
+
+    nextBtn.addEventListener("click", () => {
+      goToStep(currentStep + 1);
+    });
+
+    // ===== 自動播放控制 =====
+    function startPlay() {
+      if (playing || steps.length === 0) return;
+      playing = true;
+      playBtn.textContent = "停止自動播放";
+      timerId = setInterval(() => {
+        if (currentStep >= steps.length - 1) {
+          stopPlay();
+          return;
+        }
+        goToStep(currentStep + 1);
+      }, 1200); // 每 1.2 秒一個步驟，可自行調整
+    }
+
+    function stopPlay() {
+      playing = false;
+      playBtn.textContent = "自動播放";
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    playBtn.addEventListener("click", () => {
+      if (playing) {
+        stopPlay();
+      } else {
+        startPlay();
+      }
+    });
+
+    // ===== 重新隨機矩陣 =====
+    resetBtn.addEventListener("click", () => {
+      generateRandomMatrix();
+      dist = cloneMatrix(distInit);
+      buildTable();
+      buildSteps();
+      currentStep = 0;
+      renderStep();
+    });
+
+    // ===== 套用使用者輸入的 B =====
+    applyBBtn.addEventListener("click", () => {
+      let val = parseInt(bInput.value, 10);
+      if (isNaN(val) || val <= 0) {
+        alert("B 必須是 1 到 " + V + " 的整數。");
+        bInput.value = B;
+        return;
+      }
+      if (val > V) val = V;
+      B = val;
+      bInput.value = B;
+
+      // 重新畫 block 邊界與步驟，但保留目前隨機圖 (distInit)
+      dist = cloneMatrix(distInit);
+      updateBlockBorders();
+      buildSteps();
+      currentStep = 0;
+      renderStep();
+    });
+
+    // ===== 套用使用者輸入的 V =====
+    applyVBtn.addEventListener("click", () => {
+      let val = parseInt(vInput.value, 10);
+      if (isNaN(val) || val <= 0) {
+        alert("V 必須是正整數。");
+        vInput.value = V;
+        return;
+      }
+
+      // 給一個上限避免動畫太大 (可視需要調整)
+      if (val > 16) val = 16;
+
+      V = val;
+      vInput.value = V;
+
+      // 調整 B，確保 B <= V
+      if (B > V) {
+        B = V;
+        bInput.value = B;
+      }
+      bInput.max = V;
+
+      // 依新的 V 重新產生隨機圖、表格與步驟
+      generateRandomMatrix();
+      buildTable();
+      buildSteps();
+      currentStep = 0;
+      renderStep();
+    });
+
+    // ===== 初始化：隨機矩陣 + 建立表格與步驟 =====
+    generateRandomMatrix();
+    buildTable();
+    buildSteps();
+    currentStep = 0;
+    renderStep();
+  </script>
+</body>
+</html>

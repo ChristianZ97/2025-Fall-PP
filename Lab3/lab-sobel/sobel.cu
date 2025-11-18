@@ -188,5 +188,9 @@ int main(int argc, char *argv[]) {
     write_png(argv[2], host_t, height, width, channels);
 
 
+    cudaFree(device_src);
+    cudaFree(device_dst);
+    free(host_s);
+    free(host_t);
     return 0;
 }

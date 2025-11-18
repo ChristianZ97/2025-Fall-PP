@@ -1,19 +1,13 @@
-NVCC     = nvcc 
-NVCCFLAGS  = -O3 -std=c++11 -Xptxas=-v -arch=sm_61
+NVCXX = nvc++
+NVCXXFLAGS = -O0 -std=c++14 -tp=cascadelake -fast -acc -gpu=cc60 -Minfo=accel
+MNIST=-I/share/testcases/lab-mnist/weights/mnist/include
+TARGETS = mnist
 
-HIPCC = hipcc
-HIPCCFLAGS  = -O3 -std=c++11 --offload-arch=gfx908
+.PHONY: all
+all: $(TARGETS)
 
-LDFLAGS = -lpng -lz
+%: %.cpp
+	$(NVCXX) $(NVCXXFLAGS) $(MNIST) -o $@ $<
 
-TARGETS = sobel sobel-amd
-
-sobel: sobel.cu
-	$(NVCC) $(NVCCFLAGS) $(LDFLAGS) -o $@ $<
-
-sobel-amd: sobel.hip
-	$(HIPCC) $(HIPCCFLAGS) $(LDFLAGS) -o $@ $<
-
-.PHONY: clean
 clean:
 	rm -f $(TARGETS)
