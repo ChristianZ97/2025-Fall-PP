@@ -125,7 +125,10 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, c
     if ((row >= end_row) || (col >= end_col)) return;
 
     int dist_ij = d_Dist[row * n + col];
-    for (int k = 0; k < (end_k - start_k); ++k) {
+
+#pragma unroll
+
+    for (int k = 0; k < BLOCKING_FACTOR; ++k) {
 
         const int dist_ik = sm_ik[ty][k];
         const int dist_kj = sm_kj[k][tx];
