@@ -55,10 +55,10 @@ void block_FW() {
         cal_dependent(r, r, r, 1, 1);
 
         /* Phase 2*/
-        cal_dependent(r, r, 0, r, 1);
-        cal_dependent(r, r, r + 1, round - r - 1, 1);
-        cal_dependent(r, 0, r, 1, r);
-        cal_dependent(r, r + 1, r, 1, round - r - 1);
+        cal_independent(r, r, 0, r, 1);
+        cal_independent(r, r, r + 1, round - r - 1, 1);
+        cal_independent(r, 0, r, 1, r);
+        cal_independent(r, r + 1, r, 1, round - r - 1);
 
         /* Phase 3*/
         cal_independent(r, 0, 0, r, r);
