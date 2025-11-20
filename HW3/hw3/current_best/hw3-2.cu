@@ -102,16 +102,33 @@ __global__ void kernel_single(int *d_Dist, const int n, const int start_row, con
 
 __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int start_k, const int end_k) {
 
-    const int col = blockDim.x * blockIdx.x + threadIdx.x + start_col;
-    const int row = blockDim.y * blockIdx.y + threadIdx.y + start_row;
+    __shared__ int sm_ik[BLOCK_DIM_X][BLOCK_DIM_Y];
+    __shared__ int sm_kj[BLOCK_DIM_X][BLOCK_DIM_Y];
+
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
+
+    const int col = blockDim.x * blockIdx.x + tx + start_col;
+    const int row = blockDim.y * blockIdx.y + ty + start_row;
+
+    const int global_ik_col = start_k + tx;
+    const int global_ik_row = row;
+
+    const int global_kj_col = col;
+    const int global_kj_row = start_k + ty;
+
+    sm_ik[ty][tx] = (global_ik_col < n && global_ik_row < n) ? d_Dist[global_ik_row * n + global_ik_col] : INF;
+    sm_kj[ty][tx] = (global_kj_col < n && global_kj_row < n) ? d_Dist[global_kj_row * n + global_kj_col] : INF;
+
+    __syncthreads();
 
     if ((row >= end_row) || (col >= end_col)) return;
 
     int dist_ij = d_Dist[row * n + col];
-    for (int k = start_k; k < end_k; ++k) {
+    for (int k = 0; k < (end_k - start_k); ++k) {
 
-        const int dist_ik = d_Dist[row * n + k];
-        const int dist_kj = d_Dist[k * n + col];
+        const int dist_ik = sm_ik[ty][k];
+        const int dist_kj = sm_kj[k][tx];
         dist_ij = min(dist_ij, dist_ik + dist_kj);
     }
     d_Dist[row * n + col] = dist_ij;
