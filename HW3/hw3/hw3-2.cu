@@ -5,8 +5,8 @@
 // #define DEV_NO 0
 // cudaDeviceProp prop;
 
-#define BLOCKING_FACTOR 32
-#define BLOCK_DIM_X 32
+#define BLOCKING_FACTOR 256
+#define BLOCK_DIM_X 16
 #define BLOCK_DIM_Y 32
 
 const int INF = ((1 << 30) - 1);
@@ -102,8 +102,8 @@ __global__ void kernel_single(int *d_Dist, const int n, const int start_row, con
 
 __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int start_k, const int end_k) {
 
-    __shared__ int sm_ik[BLOCK_DIM_X][BLOCK_DIM_Y];
-    __shared__ int sm_kj[BLOCK_DIM_X][BLOCK_DIM_Y];
+    __shared__ int sm_ik[BLOCK_DIM_Y][BLOCKING_FACTOR];
+    __shared__ int sm_kj[BLOCKING_FACTOR][BLOCK_DIM_X];
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
@@ -111,14 +111,25 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, c
     const int col = blockDim.x * blockIdx.x + tx + start_col;
     const int row = blockDim.y * blockIdx.y + ty + start_row;
 
-    const int global_ik_col = start_k + tx;
-    const int global_ik_row = row;
+    //const int global_ik_col = start_k + tx;
+    //const int global_ik_row = row;
 
-    const int global_kj_col = col;
-    const int global_kj_row = start_k + ty;
+    //const int global_kj_col = col;
+    //const int global_kj_row = start_k + ty;
 
-    sm_ik[ty][tx] = (global_ik_col < n && global_ik_row < n) ? d_Dist[global_ik_row * n + global_ik_col] : INF;
-    sm_kj[ty][tx] = (global_kj_col < n && global_kj_row < n) ? d_Dist[global_kj_row * n + global_kj_col] : INF;
+
+    for (int kk = tx; kk < BLOCKING_FACTOR; kk += BLOCK_DIM_X) {
+        int gk = start_k + kk;
+        sm_ik[ty][kk] = (gk < n && row < n) ? d_Dist[row * n + gk] : INF;
+    }
+
+    for (int kk = ty; kk < BLOCKING_FACTOR; kk += BLOCK_DIM_Y) {
+        int gk = start_k + kk;
+        sm_kj[kk][tx] = (col < n && gk < n) ? d_Dist[gk * n + col] : INF;
+    }
+
+    //sm_ik[ty][tx] = (global_ik_col < n && global_ik_row < n) ? d_Dist[global_ik_row * n + global_ik_col] : INF;
+    //sm_kj[ty][tx] = (global_kj_col < n && global_kj_row < n) ? d_Dist[global_kj_row * n + global_kj_col] : INF;
 
     __syncthreads();
 
