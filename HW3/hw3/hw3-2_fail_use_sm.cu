@@ -5,9 +5,9 @@
 // #define DEV_NO 0
 // cudaDeviceProp prop;
 
-#define BLOCKING_FACTOR 512
-#define BLOCK_DIM_X 1
-#define BLOCK_DIM_Y 512
+#define BLOCKING_FACTOR 32
+#define BLOCK_DIM_X 32
+#define BLOCK_DIM_Y 32
 
 const int INF = ((1 << 30) - 1);
 static int *Dist;
@@ -135,10 +135,29 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int element_star
     const int x = element_start_x + local_x;
     const int y = element_start_y + local_y;
 
+    __shared__ int shared_xk_arr[BLOCK_DIM_X][BLOCKING_FACTOR];
+    __shared__ int shared_ky_arr[BLOCKING_FACTOR][BLOCK_DIM_Y];
+
+    const int thread_k_y = start_k + threadIdx.y;
+    const int thread_k_x = start_k + threadIdx.x;
+
+    shared_xk_arr[threadIdx.x][threadIdx.y] = (x < n && thread_k_y < n) ? d_Dist[x * n + thread_k_y] : INF;
+    shared_ky_arr[threadIdx.x][threadIdx.y] = (thread_k_x < n && y < n) ? d_Dist[thread_k_x * n + y] : INF;
+
+    __syncthreads();
+
     if ((x >= element_end_x) || (y >= element_end_y)) return;
 
-    for (int k = start_k; k < end_k; ++k)
-        d_Dist[x * n + y] = min(d_Dist[x * n + y], d_Dist[x * n + k] + d_Dist[k * n + y]);
+    int dist_xy = d_Dist[x * n + y];
+    for (int k = start_k; k < end_k; ++k) {
+
+        const int k_offset = k - start_k;
+        const int dist_xk = shared_xk_arr[threadIdx.x][k_offset];
+        const int dist_ky = shared_ky_arr[k_offset][threadIdx.y];
+        dist_xy = min(dist_xy, dist_xk + dist_ky);
+        //d_Dist[x * n + y] = min(d_Dist[x * n + y], d_Dist[x * n + k] + d_Dist[k * n + y]);
+    }
+    d_Dist[x * n + y] = dist_xy;
 }
 
 void input(char *infile) {
