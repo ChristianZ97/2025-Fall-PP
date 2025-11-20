@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Blocked FW: 微觀資料相依性視覺化</title>
+  <style>
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background-color: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      color: #333;
+    }
+
+    h2 { margin-bottom: 5px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+
+    /* 主佈局 */
+    .layout {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    /* 矩陣容器 */
+    .matrix-wrapper {
+      position: relative;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+
+    table { border-collapse: collapse; }
+    
+    td {
+      width: 50px; height: 50px;
+      border: 1px solid #eee;
+      text-align: center;
+      font-size: 12px;
+      position: relative;
+      transition: all 0.3s ease;
+      color: #ccc;
+    }
+
+    /* 區塊邊界 (B=2) */
+    .block-border-right { border-right: 3px solid #444; }
+    .block-border-bottom { border-bottom: 3px solid #444; }
+
+    /* 狀態樣式 */
+    .cell-active-block { background-color: #FFF8E1; } /* 淺黃：當前 Phase 涉及的 Block */
+    .cell-pivot-k { background-color: #E0F2F1; color: #009688; font-weight: bold; } /* 潛在的 k 行/列 */
+
+    /* 核心角色 */
+    .cell-target {
+      background-color: #FF5252 !important;
+      color: white !important;
+      font-weight: bold;
+      box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.5);
+      z-index: 10;
+      border-radius: 4px;
+    }
+    
+    .cell-source-safe {
+      background-color: #2196F3 !important;
+      color: white !important;
+      border-radius: 50%;
+      transform: scale(0.8);
+      z-index: 5;
+      box-shadow: 0 0 0 3px #BBDEFB;
+    }
+
+    .cell-source-hazard {
+      background-color: #D32F2F !important; /* 深紅 */
+      color: white !important;
+      border-radius: 50%;
+      transform: scale(0.9);
+      z-index: 5;
+      box-shadow: 0 0 0 4px #FFCDD2;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
+    }
+
+    /* 控制面板 & 說明 */
+    .panel {
+      width: 320px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px;
+      cursor: pointer;
+      background-color: #37474F;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    button:hover { background-color: #263238; }
+    button:disabled { background-color: #CFD8DC; cursor: not-allowed; }
+
+    .info-box {
+      border-top: 2px solid #eee;
+      padding-top: 15px;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 8px;
+    }
+    
+    .desc-line {
+      margin: 8px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .legend-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* SVG 連線 */
+    svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+    line {
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+    .line-safe { stroke: #2196F3; stroke-dasharray: 5; }
+    .line-hazard { stroke: #D32F2F; stroke-width: 3; }
+
+  </style>
+</head>
+<body>
+
+  <h2>Blocked FW: 資料相依性微觀檢視</h2>
+  <div class="subtitle">觀察 D[i][k] 與 D[k][j] 是否落在同一個 Block 內</div>
+
+  <div class="layout">
+    
+    <div class="matrix-wrapper">
+      <svg id="connections"></svg>
+      <table id="grid"></table>
+    </div>
+
+    <div class="panel">
+      <div class="controls">
+        <button id="btnPrev" disabled>上一步</button>
+        <button id="btnNext">下一步</button>
+      </div>
+      
+      <div id="phaseInfo">
+        <h3 id="stepTitle" style="margin: 0 0 10px 0; color:#1976D2;">準備開始</h3>
+        <div id="badgeContainer"></div>
+        
+        <div class="info-box">
+          <div class="desc-line">
+            <span class="legend-dot" style="background:#FF5252"></span>
+            <span>Target (正在算): <strong id="txtTarget">-</strong></span>
+          </div>
+          <div class="desc-line">
+            <span class="legend-dot" style="background:#2196F3"></span>
+            <span>Source 1 (Row k): <span id="txtSrc1">-</span></span>
+          </div>
+          <div class="desc-line">
+            <span class="legend-dot" style="background:#2196F3"></span>
+            <span>Source 2 (Col k): <span id="txtSrc2">-</span></span>
+          </div>
+          
+          <p id="analysisText" style="font-size:13px; line-height:1.5; color:#555; margin-top:15px;">
+            點擊「下一步」開始演示。
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+// 參數設定
+const V = 6; 
+const B = 2;
+const TOTAL_ROUNDS = V / B; 
+
+let steps = [];
+let currentIdx = -1;
+
+const grid = document.getElementById('grid');
+const svg = document.getElementById('connections');
+const btnNext = document.getElementById('btnNext');
+const btnPrev = document.getElementById('btnPrev');
+
+// DOM 元素
+const txtTarget = document.getElementById('txtTarget');
+const txtSrc1 = document.getElementById('txtSrc1');
+const txtSrc2 = document.getElementById('txtSrc2');
+const stepTitle = document.getElementById('stepTitle');
+const badgeContainer = document.getElementById('badgeContainer');
+const analysisText = document.getElementById('analysisText');
+
+// 初始化表格
+function initGrid() {
+  grid.innerHTML = '';
+  for(let r=0; r<V; r++) {
+    const tr = document.createElement('tr');
+    for(let c=0; c<V; c++) {
+      const td = document.createElement('td');
+      td.id = `cell-${r}-${c}`;
+      td.textContent = `${r},${c}`;
+      if ((c + 1) % B === 0 && c !== V - 1) td.classList.add('block-border-right');
+      if ((r + 1) % B === 0 && r !== V - 1) td.classList.add('block-border-bottom');
+      tr.appendChild(td);
+    }
+    grid.appendChild(tr);
+  }
+}
+
+// 生成步驟
+function generateSteps() {
+  const s = [];
+  
+  // 我們只演示 Round 0 (最清楚)
+  const r = 0;
+  const k = 0; // 固定 k=0 作為示例
+
+  // 1. Phase 1: Pivot Block (0,0)
+  // 挑選 Element (1,1)
+  s.push({
+    phase: 1,
+    title: "Phase 1: Pivot Block",
+    target: {r: 1, c: 1},
+    k: k,
+    desc: "正在更新對角線區塊內的 (1,1)。<br>注意：Source 1 (1,0) 和 Source 2 (0,1) 都在同一個 Block 內！<br>這就是為什麼不能隨意平行化，會讀到別人正在改的值。"
+  });
+
+  // 2. Phase 2: Pivot Row (Block 0,1)
+  // 挑選 Element (1,3) -> Block(0,1) 內的點
+  s.push({
+    phase: 2,
+    title: "Phase 2: Pivot Row",
+    target: {r: 1, c: 3},
+    k: k,
+    desc: "正在更新 Pivot Row 區塊內的 (1,3)。<br>Source 1 (1,0) 在 Pivot Block (已固定，安全)。<br>但 Source 2 (0,3) 就在**這個 Block** 內！<br>相鄰執行緒依賴，危險！"
+  });
+
+  // 3. Phase 3: Independent (Block 1,1)
+  // 挑選 Element (3,3) -> Block(1,1) 內的點
+  s.push({
+    phase: 3,
+    title: "Phase 3: Independent",
+    target: {r: 3, c: 3},
+    k: k,
+    desc: "正在更新一般區塊內的 (3,3)。<br>Source 1 (3,0) 在 Pivot Column Block。<br>Source 2 (0,3) 在 Pivot Row Block。<br>兩者都在**外面**且已固定。<br>Block 內完全無依賴，可以直接把 k loop 搬進 kernel！"
+  });
+
+  return s;
+}
+
+function renderStep(idx) {
+  const step = steps[idx];
+  svg.innerHTML = '';
+  
+  // Reset Styles
+  document.querySelectorAll('td').forEach(td => {
+    td.className = ''; 
+    const r = parseInt(td.id.split('-')[1]);
+    const c = parseInt(td.id.split('-')[2]);
+    if ((c + 1) % B === 0 && c !== V - 1) td.classList.add('block-border-right');
+    if ((r + 1) % B === 0 && r !== V - 1) td.classList.add('block-border-bottom');
+  });
+
+  // 計算 Source
+  const src1 = {r: step.target.r, c: step.k}; // D[i][k]
+  const src2 = {r: step.k, c: step.target.c}; // D[k][j]
+  
+  // 判斷 Block
+  const targetBlock = { r: Math.floor(step.target.r/B), c: Math.floor(step.target.c/B) };
+  const src1Block = { r: Math.floor(src1.r/B), c: Math.floor(src1.c/B) };
+  const src2Block = { r: Math.floor(src2.r/B), c: Math.floor(src2.c/B) };
+
+  // 判斷 Hazard (是否在同一個 Block)
+  const hazard1 = (targetBlock.r === src1Block.r && targetBlock.c === src1Block.c);
+  const hazard2 = (targetBlock.r === src2Block.r && targetBlock.c === src2Block.c);
+
+  // Highlight Target Block
+  highlightBlock(targetBlock.r, targetBlock.c);
+
+  // Highlight Cells
+  getCell(step.target).classList.add('cell-target');
+  getCell(src1).classList.add(hazard1 ? 'cell-source-hazard' : 'cell-source-safe');
+  getCell(src2).classList.add(hazard2 ? 'cell-source-hazard' : 'cell-source-safe');
+
+  // Draw Lines
+  drawConnection(step.target, src1, hazard1);
+  drawConnection(step.target, src2, hazard2);
+
+  // Update Text
+  stepTitle.innerText = step.title;
+  analysisText.innerHTML = step.desc;
+  txtTarget.innerText = `(${step.target.r}, ${step.target.c})`;
+  
+  txtSrc1.innerHTML = `(${src1.r}, ${src1.c}) ` + (hazard1 ? '<span style="color:red; font-weight:bold">⚠️ 危險</span>' : '<span style="color:#2196F3; font-weight:bold">✓ 安全</span>');
+  
+  txtSrc2.innerHTML = `(${src2.r}, ${src2.c}) ` + (hazard2 ? '<span style="color:red; font-weight:bold">⚠️ 危險</span>' : '<span style="color:#2196F3; font-weight:bold">✓ 安全</span>');
+
+  // Badge
+  const badgeColor = (hazard1 || hazard2) ? '#D32F2F' : '#4CAF50';
+  const badgeText = (hazard1 || hazard2) ? 'Block 內有相依性 (須同步)' : 'Block 內無相依性 (可平行 k)';
+  badgeContainer.innerHTML = `<span class="badge" style="background:${badgeColor}">${badgeText}</span>`;
+}
+
+function getCell(pos) {
+  return document.getElementById(`cell-${pos.r}-${pos.c}`);
+}
+
+function highlightBlock(br, bc) {
+  for(let r=br*B; r<(br+1)*B; r++) {
+    for(let c=bc*B; c<(bc+1)*B; c++) {
+      const td = document.getElementById(`cell-${r}-${c}`);
+      if(td) td.classList.add('cell-active-block');
+    }
+  }
+}
+
+function drawConnection(p1, p2, isHazard) {
+  const td1 = getCell(p1);
+  const td2 = getCell(p2);
+  const r1 = td1.getBoundingClientRect();
+  const r2 = td2.getBoundingClientRect();
+  const box = grid.getBoundingClientRect();
+
+  const x1 = r1.left + r1.width/2 - box.left;
+  const y1 = r1.top + r1.height/2 - box.top;
+  const x2 = r2.left + r2.width/2 - box.left;
+  const y2 = r2.top + r2.height/2 - box.top;
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  line.setAttribute('class', isHazard ? 'line-hazard' : 'line-safe');
+  svg.appendChild(line);
+}
+
+// Button Logic
+btnNext.onclick = () => {
+  if(currentIdx < steps.length - 1) {
+    currentIdx++;
+    renderStep(currentIdx);
+    btnPrev.disabled = false;
+  }
+};
+btnPrev.onclick = () => {
+  if(currentIdx > 0) {
+    currentIdx--;
+    renderStep(currentIdx);
+  } else {
+    btnPrev.disabled = true;
+  }
+};
+
+initGrid();
+steps = generateSteps();
+currentIdx = 0;
+renderStep(0);
+
+</script>
+</body>
+</html>

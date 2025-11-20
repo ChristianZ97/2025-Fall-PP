@@ -16,12 +16,14 @@ static int n, m;
 
 void input(char *inFileName);
 void output(char *outFileName);
-int ceil(int a, int b);
 
-void block_FW(const int B);
-void cal(const int B, const int round, const int block_start_x, const int block_start_y, const int block_width, const int block_height);
-__global__ void kernel(
-    int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int k);
+void block_FW();
+
+void cal_dependent(const int current_round, const int block_start_x, const int block_start_y, const int block_width, const int block_height);
+__global__ void kernel_single(int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int k);
+
+void cal_independent(const int current_round, const int block_start_x, const int block_start_y, const int block_width, const int block_height);
+__global__ void kernel_multiple(int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int start_k, const int end_k);
 
 int main(int argc, char *argv[]) {
 
@@ -32,7 +34,7 @@ int main(int argc, char *argv[]) {
 
     // cudaGetDeviceProperties(&prop, DEV_NO);
     // printf("maxThreadsPerBlock = %d, sharedMemPerBlock = %d", prop.maxThreadsPerBlock, prop.sharedMemPerBlock);
-    block_FW(BLOCKING_FACTOR);
+    block_FW();
 
     cudaMemcpy(Dist, d_Dist, n * n * sizeof(int), cudaMemcpyDeviceToHost);
     cudaFree(d_Dist);
@@ -42,55 +44,54 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void block_FW(const int B) {
+void block_FW() {
 
-    const int round = ceil(n, B);
+    const int round = (n + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR;
     for (int r = 0; r < round; ++r) {
         // printf("%d %d\n", r, round);
         // fflush(stdout);
 
         /* Phase 1*/
-        cal(B, r, r, r, 1, 1);
+        cal_dependent(r, r, r, 1, 1);
 
         /* Phase 2*/
-        cal(B, r, r, 0, r, 1);
-        cal(B, r, r, r + 1, round - r - 1, 1);
-        cal(B, r, 0, r, 1, r);
-        cal(B, r, r + 1, r, 1, round - r - 1);
+        cal_dependent(r, r, 0, r, 1);
+        cal_dependent(r, r, r + 1, round - r - 1, 1);
+        cal_dependent(r, 0, r, 1, r);
+        cal_dependent(r, r + 1, r, 1, round - r - 1);
 
         /* Phase 3*/
-        cal(B, r, 0, 0, r, r);
-        cal(B, r, 0, r + 1, round - r - 1, r);
-        cal(B, r, r + 1, 0, r, round - r - 1);
-        cal(B, r, r + 1, r + 1, round - r - 1, round - r - 1);
+        cal_independent(r, 0, 0, r, r);
+        cal_independent(r, 0, r + 1, round - r - 1, r);
+        cal_independent(r, r + 1, 0, r, round - r - 1);
+        cal_independent(r, r + 1, r + 1, round - r - 1, round - r - 1);
     }
 }
 
-void cal(const int B, const int round, const int block_start_x, const int block_start_y, const int block_width, const int block_height) {
+void cal_dependent(const int current_round, const int block_start_x, const int block_start_y, const int block_width, const int block_height) {
 
     const int block_end_x = block_start_x + block_height;
     const int block_end_y = block_start_y + block_width;
 
     for (int b_j = block_start_y; b_j < block_end_y; ++b_j) {
         for (int b_i = block_start_x; b_i < block_end_x; ++b_i) {
-            for (int k = round * B; k < (round + 1) * B && k < n; ++k) {
 
-                const int element_start_x = b_i * B;
-                const int element_start_y = b_j * B;
+            const int element_start_x = b_i * BLOCKING_FACTOR;
+            const int element_start_y = b_j * BLOCKING_FACTOR;
 
-                const int element_end_x = min(element_start_x + B, n);
-                const int element_end_y = min(element_start_y + B, n);
+            const int element_end_x = min(element_start_x + BLOCKING_FACTOR, n);
+            const int element_end_y = min(element_start_y + BLOCKING_FACTOR, n);
 
-                dim3 blocks_per_grid((element_end_x - element_start_x + BLOCK_DIM_X - 1) / BLOCK_DIM_X, (element_end_y - element_start_y + BLOCK_DIM_Y - 1) / BLOCK_DIM_Y);
-                dim3 threads_per_block(BLOCK_DIM_X, BLOCK_DIM_Y);
-                kernel<<<blocks_per_grid, threads_per_block>>>(d_Dist, n, element_start_x, element_start_y, element_end_x, element_end_y, k);
-            }
+            dim3 blocks_per_grid((element_end_x - element_start_x + BLOCK_DIM_X - 1) / BLOCK_DIM_X, (element_end_y - element_start_y + BLOCK_DIM_Y - 1) / BLOCK_DIM_Y);
+            dim3 threads_per_block(BLOCK_DIM_X, BLOCK_DIM_Y);
+
+            for (int k = current_round * BLOCKING_FACTOR; k < (current_round + 1) * BLOCKING_FACTOR && k < n; ++k)
+                kernel_single<<<blocks_per_grid, threads_per_block>>>(d_Dist, n, element_start_x, element_start_y, element_end_x, element_end_y, k);
         }
     }
 }
 
-__global__ void kernel(
-    int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int k) {
+__global__ void kernel_single(int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int k) {
 
     const int local_x = blockDim.x * blockIdx.x + threadIdx.x;
     const int local_y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -98,8 +99,46 @@ __global__ void kernel(
     const int x = element_start_x + local_x;
     const int y = element_start_y + local_y;
 
-    if (x >= element_end_x || y >= element_end_y) return;
+    if ((x >= element_end_x) || (y >= element_end_y)) return;
     d_Dist[x * n + y] = min(d_Dist[x * n + y], d_Dist[x * n + k] + d_Dist[k * n + y]);
+}
+
+void cal_independent(const int current_round, const int block_start_x, const int block_start_y, const int block_width, const int block_height) {
+
+    const int block_end_x = block_start_x + block_height;
+    const int block_end_y = block_start_y + block_width;
+
+    for (int b_j = block_start_y; b_j < block_end_y; ++b_j) {
+        for (int b_i = block_start_x; b_i < block_end_x; ++b_i) {
+
+            const int element_start_x = b_i * BLOCKING_FACTOR;
+            const int element_start_y = b_j * BLOCKING_FACTOR;
+
+            const int element_end_x = min(element_start_x + BLOCKING_FACTOR, n);
+            const int element_end_y = min(element_start_y + BLOCKING_FACTOR, n);
+
+            const int start_k = current_round * BLOCKING_FACTOR;
+            const int end_k = min((current_round + 1) * BLOCKING_FACTOR, n);
+
+            dim3 blocks_per_grid((element_end_x - element_start_x + BLOCK_DIM_X - 1) / BLOCK_DIM_X, (element_end_y - element_start_y + BLOCK_DIM_Y - 1) / BLOCK_DIM_Y);
+            dim3 threads_per_block(BLOCK_DIM_X, BLOCK_DIM_Y);
+            kernel_multiple<<<blocks_per_grid, threads_per_block>>>(d_Dist, n, element_start_x, element_start_y, element_end_x, element_end_y, start_k, end_k);
+        }
+    }
+}
+
+__global__ void kernel_multiple(int *d_Dist, const int n, const int element_start_x, const int element_start_y, const int element_end_x, const int element_end_y, const int start_k, const int end_k) {
+
+    const int local_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int local_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int x = element_start_x + local_x;
+    const int y = element_start_y + local_y;
+
+    if ((x >= element_end_x) || (y >= element_end_y)) return;
+
+    for (int k = start_k; k < end_k; ++k)
+        d_Dist[x * n + y] = min(d_Dist[x * n + y], d_Dist[x * n + k] + d_Dist[k * n + y]);
 }
 
 void input(char *infile) {
@@ -128,9 +167,4 @@ void output(char *outFileName) {
         fwrite(Dist + i * n, sizeof(int), n, outfile);
     }
     fclose(outfile);
-}
-
-int ceil(int a, int b) {
-
-    return (a + b - 1) / b;
 }
