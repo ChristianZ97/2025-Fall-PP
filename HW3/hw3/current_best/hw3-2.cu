@@ -1,4 +1,5 @@
 #include <cuda.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7,7 +8,12 @@
 
 #define BLOCKING_FACTOR 256
 #define BLOCK_DIM_X 16
-#define BLOCK_DIM_Y 16
+#define BLOCK_DIM_Y 32
+
+/*
+BLOCK_DIM_X * BLOCK_DIM_Y <= 1024 (kernel launch limit)
+(BLOCK_DIM_X + BLOCK_DIM_Y) * BLOCKING_FACTOR * 4 <= 49152（shared mem limit）
+*/
 
 const int INF = ((1 << 30) - 1);
 static int *Dist;
@@ -51,17 +57,27 @@ void block_FW() {
         /* Phase 1: Self-Dependent Block */
         cal(r, r, r, 1, 1, 1);
 
-        /* Phase 2: Pivot Row & Column Blocks */
-        cal(r, r, 0, 1, r, 0);                  // Pivot Row (Left)
-        cal(r, r, r + 1, 1, round - r - 1, 0);  // Pivot Row (Right)
-        cal(r, 0, r, r, 1, 0);                  // Pivot Col (Top)
-        cal(r, r + 1, r, round - r - 1, 1, 0);  // Pivot Col (Bottom)
+/* Phase 2: Pivot Row & Column Blocks */
+#pragma omp parallel for num_threads(4) schedule(static)
+        for (int t = 0; t < 4; ++t) {
+            switch (t) {
+                case 0: cal(r, r, 0, 1, r, 0); break;
+                case 1: cal(r, r, r + 1, 1, round - r - 1, 0); break;
+                case 2: cal(r, 0, r, r, 1, 0); break;
+                case 3: cal(r, r + 1, r, round - r - 1, 1, 0); break;
+            }
+        }
 
-        /* Phase 3: Remaining Independent Blocks */
-        cal(r, 0, 0, r, r, 0);
-        cal(r, 0, r + 1, r, round - r - 1, 0);
-        cal(r, r + 1, 0, round - r - 1, r, 0);
-        cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0);
+/* Phase 3: Remaining Independent Blocks */
+#pragma omp parallel for num_threads(4) schedule(static)
+        for (int t = 0; t < 4; ++t) {
+            switch (t) {
+                case 0: cal(r, 0, 0, r, r, 0); break;
+                case 1: cal(r, 0, r + 1, r, round - r - 1, 0); break;
+                case 2: cal(r, r + 1, 0, round - r - 1, r, 0); break;
+                case 3: cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0); break;
+            }
+        }
     }
 }
 
@@ -93,11 +109,7 @@ __global__ void kernel_single(int *d_Dist, const int n, const int start_row, con
 
     if ((row >= end_row) || (col >= end_col)) return;
 
-    const int dist_ij = d_Dist[row * n + col];
-    const int dist_ik = d_Dist[row * n + k];
-    const int dist_kj = d_Dist[k * n + col];
-
-    d_Dist[row * n + col] = min(dist_ij, dist_ik + dist_kj);
+    d_Dist[row * n + col] = min(d_Dist[row * n + col], d_Dist[row * n + k] + d_Dist[k * n + col]);
 }
 
 __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int start_k, const int end_k) {
@@ -111,25 +123,11 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, c
     const int col = blockDim.x * blockIdx.x + tx + start_col;
     const int row = blockDim.y * blockIdx.y + ty + start_row;
 
-    //const int global_ik_col = start_k + tx;
-    //const int global_ik_row = row;
+    for (int tk = tx; tk < BLOCKING_FACTOR; tk += BLOCK_DIM_X)
+        sm_ik[ty][tk] = ((start_k + tk) < n && row < n) ? d_Dist[row * n + (start_k + tk)] : INF;
 
-    //const int global_kj_col = col;
-    //const int global_kj_row = start_k + ty;
-
-
-    for (int kk = tx; kk < BLOCKING_FACTOR; kk += BLOCK_DIM_X) {
-        int gk = start_k + kk;
-        sm_ik[ty][kk] = (gk < n && row < n) ? d_Dist[row * n + gk] : INF;
-    }
-
-    for (int kk = ty; kk < BLOCKING_FACTOR; kk += BLOCK_DIM_Y) {
-        int gk = start_k + kk;
-        sm_kj[kk][tx] = (col < n && gk < n) ? d_Dist[gk * n + col] : INF;
-    }
-
-    //sm_ik[ty][tx] = (global_ik_col < n && global_ik_row < n) ? d_Dist[global_ik_row * n + global_ik_col] : INF;
-    //sm_kj[ty][tx] = (global_kj_col < n && global_kj_row < n) ? d_Dist[global_kj_row * n + global_kj_col] : INF;
+    for (int tk = ty; tk < BLOCKING_FACTOR; tk += BLOCK_DIM_Y)
+        sm_kj[tk][tx] = (col < n && (start_k + tk) < n) ? d_Dist[(start_k + tk) * n + col] : INF;
 
     __syncthreads();
 
@@ -139,12 +137,9 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, c
 
 #pragma unroll
 
-    for (int k = 0; k < BLOCKING_FACTOR; ++k) {
+    for (int k = 0; k < BLOCKING_FACTOR; ++k)
+        dist_ij = min(dist_ij, sm_ik[ty][k] + sm_kj[k][tx]);
 
-        const int dist_ik = sm_ik[ty][k];
-        const int dist_kj = sm_kj[k][tx];
-        dist_ij = min(dist_ij, dist_ik + dist_kj);
-    }
     d_Dist[row * n + col] = dist_ij;
 }
 

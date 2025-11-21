@@ -1,10 +1,9 @@
 #include <cuda.h>
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-// #define DEV_NO 0
-// cudaDeviceProp prop;
+//#define DEV_NO 0
+//cudaDeviceProp prop;
 
 #define BLOCKING_FACTOR 256
 #define BLOCK_DIM_X 16
@@ -36,8 +35,8 @@ int main(int argc, char *argv[]) {
     cudaMalloc(&d_Dist, n * n * sizeof(int));
     cudaMemcpy(d_Dist, Dist, n * n * sizeof(int), cudaMemcpyHostToDevice);
 
-    // cudaGetDeviceProperties(&prop, DEV_NO);
-    // printf("maxThreadsPerBlock = %d, sharedMemPerBlock = %d", prop.maxThreadsPerBlock, prop.sharedMemPerBlock);
+    //cudaGetDeviceProperties(&prop, DEV_NO);
+    //printf("maxThreadsPerBlock = %d, sharedMemPerBlock = %d", prop.maxThreadsPerBlock, prop.sharedMemPerBlock);
 
     block_FW();
 
@@ -57,27 +56,17 @@ void block_FW() {
         /* Phase 1: Self-Dependent Block */
         cal(r, r, r, 1, 1, 1);
 
-/* Phase 2: Pivot Row & Column Blocks */
-#pragma omp parallel for num_threads(4) schedule(static)
-        for (int t = 0; t < 4; ++t) {
-            switch (t) {
-                case 0: cal(r, r, 0, 1, r, 0); break;
-                case 1: cal(r, r, r + 1, 1, round - r - 1, 0); break;
-                case 2: cal(r, 0, r, r, 1, 0); break;
-                case 3: cal(r, r + 1, r, round - r - 1, 1, 0); break;
-            }
-        }
+        /* Phase 2: Pivot Row & Column Blocks */
+        cal(r, r, 0, 1, r, 0);                  // Pivot Row (Left)
+        cal(r, r, r + 1, 1, round - r - 1, 0);  // Pivot Row (Right)
+        cal(r, 0, r, r, 1, 0);                  // Pivot Col (Top)
+        cal(r, r + 1, r, round - r - 1, 1, 0);  // Pivot Col (Bottom)
 
-/* Phase 3: Remaining Independent Blocks */
-#pragma omp parallel for num_threads(4) schedule(static)
-        for (int t = 0; t < 4; ++t) {
-            switch (t) {
-                case 0: cal(r, 0, 0, r, r, 0); break;
-                case 1: cal(r, 0, r + 1, r, round - r - 1, 0); break;
-                case 2: cal(r, r + 1, 0, round - r - 1, r, 0); break;
-                case 3: cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0); break;
-            }
-        }
+        /* Phase 3: Remaining Independent Blocks */
+        cal(r, 0, 0, r, r, 0);
+        cal(r, 0, r + 1, r, round - r - 1, 0);
+        cal(r, r + 1, 0, round - r - 1, r, 0);
+        cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0);
     }
 }
 
