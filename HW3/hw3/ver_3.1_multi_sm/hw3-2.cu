@@ -1,5 +1,4 @@
 #include <cuda.h>
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -20,11 +19,13 @@ static int *Dist;
 static int *d_Dist;
 static int n, m;
 
+cudaStream_t streams[4];
+
 void input(char *inFileName);
 void output(char *outFileName);
 
 void block_FW();
-void cal(const int current_round, const int block_start_row, const int block_start_col, const int block_height, const int block_width, const int dependent);
+void cal(const int current_round, const int block_start_row, const int block_start_col, const int block_height, const int block_width, const int dependent, const int stream_id);
 
 __global__ void kernel_single(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int k);
 __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int start_k, const int end_k);
@@ -32,6 +33,9 @@ __global__ void kernel_multiple(int *d_Dist, const int n, const int start_row, c
 int main(int argc, char *argv[]) {
 
     input(argv[1]);
+
+    for (int i = 0; i < 4; ++i)
+        cudaStreamCreate(&streams[i]);
 
     cudaMalloc(&d_Dist, n * n * sizeof(int));
     cudaMemcpy(d_Dist, Dist, n * n * sizeof(int), cudaMemcpyHostToDevice);
@@ -44,6 +48,9 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(Dist, d_Dist, n * n * sizeof(int), cudaMemcpyDeviceToHost);
     cudaFree(d_Dist);
 
+    for (int i = 0; i < 4; ++i)
+        cudaStreamDestroy(streams[i]);
+
     output(argv[2]);
     free(Dist);
     return 0;
@@ -55,33 +62,26 @@ void block_FW() {
     for (int r = 0; r < round; ++r) {
 
         /* Phase 1: Self-Dependent Block */
-        cal(r, r, r, 1, 1, 1);
+        cal(r, r, r, 1, 1, 1, 0);
+        cudaDeviceSynchronize();
 
-/* Phase 2: Pivot Row & Column Blocks */
-#pragma omp parallel for num_threads(4) schedule(static)
-        for (int t = 0; t < 4; ++t) {
-            switch (t) {
-                case 0: cal(r, r, 0, 1, r, 0); break;
-                case 1: cal(r, r, r + 1, 1, round - r - 1, 0); break;
-                case 2: cal(r, 0, r, r, 1, 0); break;
-                case 3: cal(r, r + 1, r, round - r - 1, 1, 0); break;
-            }
-        }
+        /* Phase 2: Pivot Row & Column Blocks */
+        cal(r, r, 0, 1, r, 0, 0);                  // Stream 0: Pivot Row (Left)
+        cal(r, r, r + 1, 1, round - r - 1, 0, 1);  // Stream 1: Pivot Row (Right)
+        cal(r, 0, r, r, 1, 0, 2);                  // Stream 2: Pivot Col (Top)
+        cal(r, r + 1, r, round - r - 1, 1, 0, 3);  // Stream 3: Pivot Col (Bottom)
+        cudaDeviceSynchronize();
 
-/* Phase 3: Remaining Independent Blocks */
-#pragma omp parallel for num_threads(4) schedule(static)
-        for (int t = 0; t < 4; ++t) {
-            switch (t) {
-                case 0: cal(r, 0, 0, r, r, 0); break;
-                case 1: cal(r, 0, r + 1, r, round - r - 1, 0); break;
-                case 2: cal(r, r + 1, 0, round - r - 1, r, 0); break;
-                case 3: cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0); break;
-            }
-        }
+        /* Phase 3: Remaining Independent Blocks */
+        cal(r, 0, 0, r, r, 0, 0);                                  // Stream 0: Top-Left
+        cal(r, 0, r + 1, r, round - r - 1, 0, 1);                  // Stream 1: Top-Right
+        cal(r, r + 1, 0, round - r - 1, r, 0, 2);                  // Stream 2: Bottom-Left
+        cal(r, r + 1, r + 1, round - r - 1, round - r - 1, 0, 3);  // Stream 3: Bottom-Right
+        cudaDeviceSynchronize();
     }
 }
 
-void cal(const int current_round, const int block_start_row, const int block_start_col, const int block_height, const int block_width, const int dependent) {
+void cal(const int current_round, const int block_start_row, const int block_start_col, const int block_height, const int block_width, const int dependent, const int stream_id) {
 
     const int start_row = block_start_row * BLOCKING_FACTOR;
     const int start_col = block_start_col * BLOCKING_FACTOR;
@@ -97,9 +97,9 @@ void cal(const int current_round, const int block_start_row, const int block_sta
 
     if (dependent)
         for (int k = start_k; k < end_k; ++k)
-            kernel_single<<<blocks_per_grid, threads_per_block>>>(d_Dist, n, start_row, start_col, end_row, end_col, k);
+            kernel_single<<<blocks_per_grid, threads_per_block, 0, streams[stream_id]>>>(d_Dist, n, start_row, start_col, end_row, end_col, k);
     else
-        kernel_multiple<<<blocks_per_grid, threads_per_block>>>(d_Dist, n, start_row, start_col, end_row, end_col, start_k, end_k);
+        kernel_multiple<<<blocks_per_grid, threads_per_block, 0, streams[stream_id]>>>(d_Dist, n, start_row, start_col, end_row, end_col, start_k, end_k);
 }
 
 __global__ void kernel_single(int *d_Dist, const int n, const int start_row, const int start_col, const int end_row, const int end_col, const int k) {
