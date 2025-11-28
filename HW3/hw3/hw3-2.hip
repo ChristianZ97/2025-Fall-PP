@@ -1,8 +1,7 @@
-// hw3-2.cu
+// hw3-2.hip
 
 /* Headers*/
-#include <cuda.h>
-
+#include <hip/hip_runtime.h>
 #include <cstdio>
 #include <cstdlib>
 
@@ -21,8 +20,8 @@ static int V, E;      // Original vertices, edges
 static int V_padded;  // Padded vertices (multiple of 64)
 
 // [OPT] Multiple streams & events are used to overlap different phases (streaming / reduce idle time).
-cudaStream_t stream_main, stream_row, stream_col;
-cudaEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
+hipStream_t stream_main, stream_row, stream_col;
+hipEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
 
 /* Function Prototypes */
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded);
@@ -45,30 +44,30 @@ int main(int argc, char *argv[]) {
 
     input(argv[1]);
 
-    cudaStreamCreate(&stream_main);
-    cudaStreamCreate(&stream_row);
-    cudaStreamCreate(&stream_col);
-    cudaEventCreate(&event_p1_done);
-    cudaEventCreate(&event_p2_row_done);
-    cudaEventCreate(&event_p2_col_done);
+    hipStreamCreate(&stream_main);
+    hipStreamCreate(&stream_row);
+    hipStreamCreate(&stream_col);
+    hipEventCreate(&event_p1_done);
+    hipEventCreate(&event_p2_row_done);
+    hipEventCreate(&event_p2_col_done);
 
     size_t size = V_padded * V_padded * sizeof(int);
-    cudaMalloc(&d_D, size);
-    cudaMemcpy(d_D, D, size, cudaMemcpyHostToDevice);
+    hipMalloc(&d_D, size);
+    hipMemcpy(d_D, D, size, hipMemcpyHostToDevice);
 
     block_FW();
 
-    cudaMemcpy(D, d_D, size, cudaMemcpyDeviceToHost);
+    hipMemcpy(D, d_D, size, hipMemcpyDeviceToHost);
     output(argv[2]);
 
     /*
-    cudaFree(d_D);
-    cudaStreamDestroy(stream_main);
-    cudaStreamDestroy(stream_row);
-    cudaStreamDestroy(stream_col);
-    cudaEventDestroy(event_p1_done);
-    cudaEventDestroy(event_p2_row_done);
-    cudaEventDestroy(event_p2_col_done);
+    hipFree(d_D);
+    hipStreamDestroy(stream_main);
+    hipStreamDestroy(stream_row);
+    hipStreamDestroy(stream_col);
+    hipEventDestroy(event_p1_done);
+    hipEventDestroy(event_p2_row_done);
+    hipEventDestroy(event_p2_col_done);
     */
 
     return 0;
@@ -84,26 +83,28 @@ void block_FW() {
     for (int r = 0; r < round; ++r) {
         // 1. Phase 1: Pivot Block
         kernel_phase1<<<1, threads_per_block, 0, stream_main>>>(d_D, r, V_padded);
-        cudaEventRecord(event_p1_done, stream_main);
+        hipEventRecord(event_p1_done, stream_main);
 
         // 2. Phase 2: Pivot Row & Col
         // (round-1) blocks per grid to cover all non-pivot blocks in the pivot row/column.
-        cudaStreamWaitEvent(stream_row, event_p1_done, 0);
-        kernel_phase2_row<<<round, threads_per_block, 0, stream_row>>>(d_D, r, V_padded);
-        cudaEventRecord(event_p2_row_done, stream_row);
+        hipStreamWaitEvent(stream_row, event_p1_done, 0);
+        dim3 grid_phase2(round - 1);
+        kernel_phase2_row<<<grid_phase2, threads_per_block, 0, stream_row>>>(d_D, r, V_padded);
+        hipEventRecord(event_p2_row_done, stream_row);
 
-        cudaStreamWaitEvent(stream_col, event_p1_done, 0);
-        kernel_phase2_col<<<round, threads_per_block, 0, stream_col>>>(d_D, r, V_padded);
-        cudaEventRecord(event_p2_col_done, stream_col);
+        hipStreamWaitEvent(stream_col, event_p1_done, 0);
+        kernel_phase2_col<<<grid_phase2, threads_per_block, 0, stream_col>>>(d_D, r, V_padded);
+        hipEventRecord(event_p2_col_done, stream_col);
 
         // 3. Phase 3: Independent Blocks
         // (round, round) blocks per grid
-        cudaStreamWaitEvent(stream_main, event_p2_row_done, 0);
-        cudaStreamWaitEvent(stream_main, event_p2_col_done, 0);
-        kernel_phase3<<<dim3(round, round), threads_per_block, 0, stream_main>>>(d_D, r, V_padded);
+        hipStreamWaitEvent(stream_main, event_p2_row_done, 0);
+        hipStreamWaitEvent(stream_main, event_p2_col_done, 0);
+        dim3 grid_phase3(round, round);
+        kernel_phase3<<<grid_phase3, threads_per_block, 0, stream_main>>>(d_D, r, V_padded);
     }
 
-    // cudaDeviceSynchronize();
+    // hipDeviceSynchronize();
 }
 
 void input(char *infile) {
@@ -116,8 +117,8 @@ void input(char *infile) {
     V_padded = (V + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR * BLOCKING_FACTOR;
 
     // Use Pinned Memory for faster host-device transfer
-    // [OPT] Pinned host memory (cudaHostAlloc) increases H2D/D2H bandwidth; affects "memory copy" time in profiling.
-    cudaHostAlloc(&D, V_padded * V_padded * sizeof(int), cudaHostAllocDefault);
+    // [OPT] Pinned host memory (hipHostAlloc) increases H2D/D2H bandwidth; affects "memory copy" time in profiling.
+    hipHostAlloc(&D, V_padded * V_padded * sizeof(int), hipHostAllocDefault);
 
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
@@ -145,7 +146,7 @@ void output(char *outfile) {
         fwrite(&D[i * V_padded], sizeof(int), V, f);
 
     fclose(f);
-    cudaFreeHost(D);  // Free Pinned Memory
+    hipFreeHost(D);  // Free Pinned Memory
 }
 
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
@@ -197,12 +198,11 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
 }
 
 __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
-
-    const int b_idx_x = blockIdx.x;
-    if (b_idx_x == r) return;  // Skip the pivot block itself (handled in Phase 1)
-
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
+
+    int b_idx_x = blockIdx.x;
+    if (b_idx_x >= r) b_idx_x++;  // Skip the pivot block itself (handled in Phase 1)
     const int b_idx_y = r;
 
     // [OPT] Shared memory tiles for pivot-row block and current row block to exploit data reuse and reduce global bandwidth.
@@ -255,12 +255,11 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
 }
 
 __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
-
-    const int b_idx_y = blockIdx.x;
-    if (b_idx_y == r) return;  // Skip the pivot block itself (handled in Phase 1)
-
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
+
+    int b_idx_y = blockIdx.x;
+    if (b_idx_y >= r) b_idx_y++;  // Skip the pivot block itself (handled in Phase 1)
     const int b_idx_x = r;
 
     // [OPT] Shared memory tiles for pivot-column block and current column block to exploit data reuse.
@@ -312,9 +311,9 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
 }
 
 __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
-
     const int b_idx_x = blockIdx.x;
     const int b_idx_y = blockIdx.y;
+
     if (b_idx_x == r || b_idx_y == r) return;  // Skip Phase 1 & 2 blocks
 
     const int tx = threadIdx.x;

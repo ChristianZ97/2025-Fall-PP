@@ -14,12 +14,12 @@ BLOCK_DIM_X * BLOCK_DIM_Y <= 1024 (kernel launch limit)
 (BLOCK_DIM_X + BLOCK_DIM_Y) * BLOCKING_FACTOR * 4 <= 49152（shared mem limit）
 */
 
-const int INF = ((1 << 30) - 1);
 static int *Dist;
 static int *d_Dist;
 static int n, m;
 
 cudaStream_t streams[4];
+__constant__ const int INF = ((1 << 30) - 1);
 
 void input(char *inFileName);
 void output(char *outFileName);

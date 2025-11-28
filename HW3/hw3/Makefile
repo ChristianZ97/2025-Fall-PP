@@ -13,7 +13,7 @@ PROF_NVFLAGS    = $(NVFLAGS) -DPROFILING
 PROF_HIPCCFLAGS = $(HIPCCFLAGS) -DPROFILING
 
 LDFLAGS = -lm
-EXES    = hw3-1 hw3-2 hw3-3
+EXES    = hw3-1 hw3-2 hw3-3 hw3-2-amd hw3-3-amd
 PROF_EXES = hw3-1-prof hw3-2-prof hw3-3-prof
 
 hw3-3: NVFLAGS += -Xcompiler="-fopenmp"
