@@ -1,9 +1,7 @@
-// hw3-3.cu
+// hw3-3.hip
 
 /* Headers */
-#include <cuda.h>
-#include <omp.h>
-
+#include <hip/hip_runtime.h>
 #include <cstdio>
 #include <cstdlib>
 
@@ -17,8 +15,8 @@ static int *d_D[2];   // Device pointers for 2 GPUs
 static int V, E;      // Original vertices, edges
 static int V_padded;  // Padded vertices (multiple of 64)
 
-cudaStream_t stream_main[2], stream_row[2], stream_col[2];
-cudaEvent_t event_p1_done[2], event_p2_row_done[2], event_p2_col_done[2];
+hipStream_t stream_main[2], stream_row[2], stream_col[2];
+hipEvent_t event_p1_done[2], event_p2_row_done[2], event_p2_col_done[2];
 
 /* Function Prototypes */
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded);
@@ -44,31 +42,31 @@ int main(int argc, char *argv[]) {
     // Use size_t for total size calculation
     size_t size = (size_t)V_padded * V_padded * sizeof(int);
 
-    cudaSetDevice(0);
-    cudaDeviceEnablePeerAccess(1, 0);
+    hipSetDevice(0);
+    hipDeviceEnablePeerAccess(1, 0);
 
-    cudaSetDevice(1);
-    cudaDeviceEnablePeerAccess(0, 0);
+    hipSetDevice(1);
+    hipDeviceEnablePeerAccess(0, 0);
 
 #pragma omp parallel num_threads(2)
     {
         const int dev_id = omp_get_thread_num();
-        cudaSetDevice(dev_id);
+        hipSetDevice(dev_id);
 
-        cudaStreamCreate(&stream_main[dev_id]);
-        cudaStreamCreate(&stream_row[dev_id]);
-        cudaStreamCreate(&stream_col[dev_id]);
-        cudaEventCreate(&event_p1_done[dev_id]);
-        cudaEventCreate(&event_p2_row_done[dev_id]);
-        cudaEventCreate(&event_p2_col_done[dev_id]);
+        hipStreamCreate(&stream_main[dev_id]);
+        hipStreamCreate(&stream_row[dev_id]);
+        hipStreamCreate(&stream_col[dev_id]);
+        hipEventCreate(&event_p1_done[dev_id]);
+        hipEventCreate(&event_p2_row_done[dev_id]);
+        hipEventCreate(&event_p2_col_done[dev_id]);
 
-        cudaMalloc(&d_D[dev_id], size);
-        cudaMemcpy(d_D[dev_id], D, size, cudaMemcpyHostToDevice);
+        hipMalloc(&d_D[dev_id], size);
+        hipMemcpy(d_D[dev_id], D, size, hipMemcpyHostToDevice);
 
 #pragma omp barrier
 
         block_FW(dev_id);
-        cudaDeviceSynchronize();
+        hipDeviceSynchronize();
 
         const int round = V_padded / BLOCKING_FACTOR;
         const int row_mid = round / 2;
@@ -78,15 +76,15 @@ int main(int argc, char *argv[]) {
         const int row_num = row_block_count * BLOCKING_FACTOR;
 
         // FIX: Cast to size_t for pointer arithmetic
-        cudaMemcpy(D + (size_t)row_start * V_padded, d_D[dev_id] + (size_t)row_start * V_padded, (size_t)row_num * V_padded * sizeof(int), cudaMemcpyDeviceToHost);
+        hipMemcpy(D + (size_t)row_start * V_padded, d_D[dev_id] + (size_t)row_start * V_padded, (size_t)row_num * V_padded * sizeof(int), hipMemcpyDeviceToHost);
 
-        cudaFree(d_D[dev_id]);
-        cudaStreamDestroy(stream_main[dev_id]);
-        cudaStreamDestroy(stream_row[dev_id]);
-        cudaStreamDestroy(stream_col[dev_id]);
-        cudaEventDestroy(event_p1_done[dev_id]);
-        cudaEventDestroy(event_p2_row_done[dev_id]);
-        cudaEventDestroy(event_p2_col_done[dev_id]);
+        hipFree(d_D[dev_id]);
+        hipStreamDestroy(stream_main[dev_id]);
+        hipStreamDestroy(stream_row[dev_id]);
+        hipStreamDestroy(stream_col[dev_id]);
+        hipEventDestroy(event_p1_done[dev_id]);
+        hipEventDestroy(event_p2_row_done[dev_id]);
+        hipEventDestroy(event_p2_col_done[dev_id]);
     }
 
     output(argv[2]);
@@ -109,30 +107,30 @@ void block_FW(const int dev_id) {
         if (dev_id == owner_id) {
 
             kernel_phase1<<<1, threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded);
-            cudaEventRecord(event_p1_done[dev_id], stream_main[dev_id]);
+            hipEventRecord(event_p1_done[dev_id], stream_main[dev_id]);
 
-            cudaStreamWaitEvent(stream_row[dev_id], event_p1_done[dev_id], 0);
+            hipStreamWaitEvent(stream_row[dev_id], event_p1_done[dev_id], 0);
             kernel_phase2_row<<<dim3(round, 1), threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded);
-            cudaEventRecord(event_p2_row_done[dev_id], stream_row[dev_id]);
+            hipEventRecord(event_p2_row_done[dev_id], stream_row[dev_id]);
 
-            cudaStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
+            hipStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
             size_t copy_size = (size_t)BLOCKING_FACTOR * V_padded * sizeof(int);
             size_t offset = (size_t)r * BLOCKING_FACTOR * V_padded;
             const int peer_id = 1 - dev_id;
 
-            cudaMemcpyPeer(d_D[peer_id] + offset, peer_id, d_D[dev_id] + offset, dev_id, copy_size);
+            hipMemcpyPeer(d_D[peer_id] + offset, peer_id, d_D[dev_id] + offset, dev_id, copy_size);
         }
 
 #pragma omp barrier
 
-        cudaStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
+        hipStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
         kernel_phase2_col<<<dim3(num_row_blocks, 1), threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block, num_row_blocks);
-        cudaEventRecord(event_p2_col_done[dev_id], stream_col[dev_id]);
+        hipEventRecord(event_p2_col_done[dev_id], stream_col[dev_id]);
 
-        cudaStreamWaitEvent(stream_main[dev_id], event_p2_col_done[dev_id], 0);
+        hipStreamWaitEvent(stream_main[dev_id], event_p2_col_done[dev_id], 0);
         kernel_phase3<<<dim3(round, num_row_blocks), threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block);
 
-        cudaDeviceSynchronize();
+        hipDeviceSynchronize();
 
 #pragma omp barrier
     }
@@ -148,7 +146,7 @@ void input(char *infile) {
 
     // Use Pinned Memory for faster host-device transfer
     // FIX: size_t for alloc size
-    cudaHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), cudaHostAllocDefault);
+    hipHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostAllocDefault);
 
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
@@ -175,7 +173,7 @@ void output(char *outfile) {
         fwrite(&D[(size_t)i * V_padded], sizeof(int), V, f);
 
     fclose(f);
-    cudaFreeHost(D);  // Free Pinned Memory
+    hipFreeHost(D);  // Free Pinned Memory
 }
 
 /* Kernels */
