@@ -2,6 +2,8 @@
 
 /* Headers */
 #include <hip/hip_runtime.h>
+#include <omp.h> 
+
 #include <cstdio>
 #include <cstdlib>
 
