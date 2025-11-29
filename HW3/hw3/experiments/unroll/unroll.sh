@@ -2,14 +2,16 @@
 
 # --- Configuration ---
 OUTPUT_CSV="unroll_results.csv"
-TEMP_OUT_FILE="temp_unroll_output.bin" # Dummy output file for the program
+TEMP_OUT_FILE="temp_unroll_output.bin"
+NVPROF_LOG="temp_nvprof.csv" # 暫存 nvprof 的輸出
 
 # --- Check for Testcase Argument ---
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <path_to_testcase>"
+    echo "Usage: $0 <testcase_path>"
     echo "Example: $0 ../../testcases/p30k1"
     exit 1
 fi
+
 TESTCASE=$1
 if [ ! -f "$TESTCASE" ]; then
     echo "Error: Testcase file not found at '$TESTCASE'"
@@ -27,10 +29,9 @@ fi
 
 # --- Step 2: Initialize CSV ---
 echo "Step 2: Preparing results file: $OUTPUT_CSV"
-echo "Version,UnrollFactor,TotalTime_ms,ComputeTime_ms,gld_throughput_GBs,gst_throughput_GBs,sm_efficiency_pct,achieved_occupancy" > "$OUTPUT_CSV"
+echo "Version,UnrollFactor,TotalTime_ms,ComputeTime_ms,Phase3_ms,gld_throughput_GBs,gst_throughput_GBs,sm_efficiency_pct,achieved_occupancy" > "$OUTPUT_CSV"
 
 # --- Step 3: Run Experiments ---
-# Get the list of executables from make
 EXECUTABLES=($(find . -maxdepth 1 -type f -executable -name "hw3-2_unroll_*" | sort))
 
 echo "Step 3: Running experiments on testcase: $(basename $TESTCASE)"
@@ -42,41 +43,61 @@ for exe in "${EXECUTABLES[@]}"; do
     
     echo "------------------------------------------"
     echo "Testing: $exe_name (Unroll Factor: $unroll_factor)"
+    
+    # 關鍵修改 1: 使用 --csv 並將 log 導向到獨立檔案，避免混淆
+    # 關鍵修改 2: --log-file 強制 nvprof 寫入檔案，不干擾 stderr
+    SRUN_CMD="srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --csv --log-file $NVPROF_LOG --metrics gld_throughput,gst_throughput,sm_efficiency,achieved_occupancy"
+    
+    # 執行程式，並抓取 stderr (現在裡面會有我們的 [PROF_RESULT])
+    # 這裡只抓程式本身的輸出
+    app_output=$($SRUN_CMD ./$exe_name "$TESTCASE" "$TEMP_OUT_FILE" 2>&1)
+    
+    # --- Parse Program Output (Time) ---
+    # 直接找 [PROF_RESULT] 這一行，用逗號分隔
+    prof_line=$(echo "$app_output" | grep "\[PROF_RESULT\]")
+    
+    if [[ -z "$prof_line" ]]; then
+        echo "Warning: Could not find [PROF_RESULT] tag in output. Did the program run?"
+        total_time=0
+        compute_time=0
+        phase3_time=0
+    else
+        # cut -d',' -f2 對應 TotalTime, f3 對應 ComputeTime, f7 對應 Phase3
+        total_time=$(echo "$prof_line" | cut -d',' -f2)
+        compute_time=$(echo "$prof_line" | cut -d',' -f3)
+        phase3_time=$(echo "$prof_line" | cut -d',' -f7)
+    fi
 
-    # The command to run with srun and nvprof
-    SRUN_CMD="srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --metrics gld_throughput,gst_throughput,sm_efficiency,achieved_occupancy"
+    # --- Parse nvprof Output (Metrics) ---
+    # nvprof 的 CSV 格式通常是:
+    # "Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+    # 我們只需要 "kernel_phase3" 的那幾行
     
-    # Run and capture all output (stdout and stderr)
-    output_log=$($SRUN_CMD $exe "$TESTCASE" "$TEMP_OUT_FILE" 2>&1)
+    if [ -f "$NVPROF_LOG" ]; then
+        # 抓取 kernel_phase3 相關的 metrics
+        # awk -F',' '{print $NF}' 抓取最後一欄 (Avg)
+        # tr -d '"' 去除引號
+        
+        gld=$(grep "kernel_phase3" "$NVPROF_LOG" | grep "gld_throughput" | awk -F',' '{print $NF}' | tr -d '"' | sed 's/GB\/s//')
+        gst=$(grep "kernel_phase3" "$NVPROF_LOG" | grep "gst_throughput" | awk -F',' '{print $NF}' | tr -d '"' | sed 's/GB\/s//')
+        eff=$(grep "kernel_phase3" "$NVPROF_LOG" | grep "sm_efficiency" | awk -F',' '{print $NF}' | tr -d '"' | sed 's/%//')
+        occ=$(grep "kernel_phase3" "$NVPROF_LOG" | grep "achieved_occupancy" | awk -F',' '{print $NF}' | tr -d '"')
+    else
+        gld=0; gst=0; eff=0; occ=0
+    fi
     
-    # --- Parse Your Program's Profiling Output ---
-    total_time=$(echo "$output_log" | grep "Total time" | awk -F': ' '{print $2}' | awk '{print $1}')
-    compute_time=$(echo "$output_log" | grep "Compute-all" | awk -F': ' '{print $2}' | awk '{print $1}')
+    # Sanitize defaults
+    gld=${gld:-0}; gst=${gst:-0}; eff=${eff:-0}; occ=${occ:-0}
     
-    # --- Parse nvprof's Metric Output ---
-    # We focus on kernel_phase3 as it's the most time-consuming
-    # Note: awk '{print $NF}' gets the last column (the 'Avg' value)
-    gld_throughput=$(echo "$output_log" | grep -A 3 "kernel_phase3" | grep "gld_throughput" | awk '{print $NF}' | sed 's/GB\/s//')
-    gst_throughput=$(echo "$output_log" | grep -A 3 "kernel_phase3" | grep "gst_throughput" | awk '{print $NF}' | sed 's/GB\/s//')
-    sm_efficiency=$(echo "$output_log" | grep -A 3 "kernel_phase3" | grep "sm_efficiency" | awk '{print $NF}' | sed 's/%//')
-    achieved_occupancy=$(echo "$output_log" | grep -A 3 "kernel_phase3" | grep "achieved_occupancy" | awk '{print $NF}')
-
-    # Default to 0 if parsing fails
-    total_time=${total_time:-0}; compute_time=${compute_time:-0}
-    gld_throughput=${gld_throughput:-0}; gst_throughput=${gst_throughput:-0}
-    sm_efficiency=${sm_efficiency:-0}; achieved_occupancy=${achieved_occupancy:-0}
-
-    echo "  -> Total Time: ${total_time} ms | Compute Time: ${compute_time} ms"
-    echo "  -> GLD Throughput: ${gld_throughput} GB/s | SM Efficiency: ${sm_efficiency}%"
+    echo " -> Time: Total=${total_time}ms, Compute=${compute_time}ms, Phase3=${phase3_time}ms"
+    echo " -> Metrics: GLD=${gld} GB/s, Eff=${eff}%"
     
-    # --- Append to CSV ---
-    echo "$exe_name,$unroll_factor,$total_time,$compute_time,$gld_throughput,$gst_throughput,$sm_efficiency,$achieved_occupancy" >> "$OUTPUT_CSV"
+    # Append to CSV
+    echo "$exe_name,$unroll_factor,$total_time,$compute_time,$phase3_time,$gld,$gst,$eff,$occ" >> "$OUTPUT_CSV"
 
 done
 
-# --- Cleanup ---
-rm -f "$TEMP_OUT_FILE"
+# Cleanup
+rm -f "$TEMP_OUT_FILE" "$NVPROF_LOG"
 echo "------------------------------------------"
-echo ""
-echo "All unroll experiments completed!"
-echo "Results saved to $OUTPUT_CSV"
+echo "All unroll experiments completed! Results saved to $OUTPUT_CSV"
