@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+
 #ifdef PROFILING
     // -------------------------
     // Host-side CUDA events for H2D / D2H
@@ -390,7 +391,7 @@ void input(char *infile) {
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
 
-#pragma unroll 32
+#pragma unroll 8
 
     for (int i = 0; i < V_padded; ++i)
         for (int j = 0; j < V_padded; ++j)
@@ -438,7 +439,7 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
 
     // 2. Floyd-Warshall Computation within the block
 
-#pragma unroll 32
+#pragma unroll 8
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         const int pivot_row_val1 = sm[ty][k];
@@ -487,7 +488,7 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-#pragma unroll 32
+#pragma unroll 8
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         int pivot_val1, pivot_val2, self_val1, self_val2;
@@ -536,7 +537,7 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
     sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-#pragma unroll 32
+#pragma unroll 8
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         int pivot_val1, pivot_val2, self_val1, self_val2;
@@ -592,7 +593,7 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
     val[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
     val[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
 
-#pragma unroll 32
+#pragma unroll 8
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         const int r1 = sm_row[ty][k];

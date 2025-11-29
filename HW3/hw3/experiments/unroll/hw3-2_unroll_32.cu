@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+
 #ifdef PROFILING
     // -------------------------
     // Host-side CUDA events for H2D / D2H
