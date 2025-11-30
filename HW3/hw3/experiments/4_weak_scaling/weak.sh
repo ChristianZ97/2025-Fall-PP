@@ -11,6 +11,10 @@ PAIRS=(
 "p12k1 p15k1"
 "p15k1 p19k1"
 "p24k1 p30k1"
+"p34k1 p43k1"
+"p35k1 p44k1"
+"p36k1 p45k1"
+"p40k1 p50k1"
 )
 
 TESTCASE_DIR="../../testcases"
