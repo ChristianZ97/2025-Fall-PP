@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+
 #ifdef PROFILING
     // -------------------------
     // Host-side CUDA events for H2D / D2H
@@ -148,7 +149,6 @@ int main(int argc, char *argv[]) {
     output(argv[2]);
 #endif
 
-/*
     cudaFree(d_D);
     cudaStreamDestroy(stream_main);
     cudaStreamDestroy(stream_row);
@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
     cudaEventDestroy(event_p1_done);
     cudaEventDestroy(event_p2_row_done);
     cudaEventDestroy(event_p2_col_done);
-*/
+
 #ifdef PROFILING
     // ============================================================
     // Profiling report: computing / communication(H2D+D2H) / I/O
@@ -234,8 +234,14 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "  (No I/O time recorded)\n");
     }
 
-    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
-            time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
+    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", 
+        total_time_ms, 
+        time_compute_total_ms, 
+        time_comm_total_ms, 
+        time_io_total_ms,
+        time_phase1_ms,
+        time_phase2_row_ms + time_phase2_col_ms,
+        time_phase3_ms);
 
     cudaEventDestroy(event_h2d_start);
     cudaEventDestroy(event_h2d_stop);

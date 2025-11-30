@@ -28,7 +28,6 @@ for i in {11..40}; do
     if [ -f "$target_file" ]; then
         TESTCASES+=("$target_file")
     else
-        # Optional warning
         true
     fi
 done
@@ -57,8 +56,6 @@ echo "Version,MemoryType,BlockFactor,Coarsening,Workload,Testcase,TotalTime_ms,C
 echo "Version,MemoryType,BlockFactor,Coarsening,Workload,GrandTotalTime_ms,TotalComputeTime_ms" > "$SUMMARY_CSV"
 
 # --- Step 3: Run Experiments ---
-# Find executables matching hw3-2_* (excluding script itself and non-executables)
-# We use 'find' with perm /111 to find executables, and filter by name.
 EXECUTABLES=($(find . -maxdepth 1 -type f -executable -name "hw3-2_*" ! -name "*.sh" ! -name "*.cu" | sort))
 
 if [ ${#EXECUTABLES[@]} -eq 0 ]; then
@@ -75,7 +72,7 @@ for exe in "${EXECUTABLES[@]}"; do
     # --- Extract Parameters from Filename ---
     # Format: hw3-2_[global|sm]_bf[XX]_[coarsen|noncoarsen]_[XXXX]
     
-    # 1. Memory Type (global / sm)
+    # 1. Memory Type
     if [[ "$exe_name" == *"_global_"* ]]; then
         mem_type="Global"
     elif [[ "$exe_name" == *"_sm_"* ]]; then
@@ -84,11 +81,10 @@ for exe in "${EXECUTABLES[@]}"; do
         mem_type="Unknown"
     fi
     
-    # 2. Block Factor (bfXX)
-    # Extract number after 'bf'
+    # 2. Block Factor
     bf_val=$(echo "$exe_name" | grep -o "bf[0-9]*" | sed 's/bf//')
     
-    # 3. Coarsening (coarsen / noncoarsen)
+    # 3. Coarsening
     if [[ "$exe_name" == *"_noncoarsen"* ]]; then
         coarsen="No"
     elif [[ "$exe_name" == *"_coarsen"* ]]; then
@@ -97,8 +93,7 @@ for exe in "${EXECUTABLES[@]}"; do
         coarsen="Unknown"
     fi
     
-    # 4. Workload (number at end)
-    # Extract number at end of string (e.g., _1024 -> 1024)
+    # 4. Workload
     workload=$(echo "$exe_name" | grep -o "[0-9]*$" )
     
     echo "=========================================="
@@ -123,7 +118,9 @@ for exe in "${EXECUTABLES[@]}"; do
         
         if [[ -z "$prof_line" ]]; then
             echo "FAILED / TIMEOUT"
-            total_time=0; compute_time=0
+            # ★ 失敗時記錄為 -1，方便畫圖時過濾
+            total_time="-1"
+            compute_time="-1"
         else
             # [PROF_RESULT],TotalTime,ComputeTime,...
             total_time=$(echo "$prof_line" | cut -d',' -f2)
@@ -131,16 +128,17 @@ for exe in "${EXECUTABLES[@]}"; do
             
             echo "${total_time} ms"
             
+            # ★ 只有成功時才加入 Grand Total，避免 bc 報錯
             grand_total_time=$(echo "$grand_total_time + $total_time" | bc)
             grand_compute_time=$(echo "$grand_compute_time + $compute_time" | bc)
-            
-            # Append per-testcase result
-            echo "$exe_name,$mem_type,$bf_val,$coarsen,$workload,$tc_name,$total_time,$compute_time" >> "$OUTPUT_CSV"
         fi
+        
+        # ★ 無論成功失敗，都寫入 CSV
+        echo "$exe_name,$mem_type,$bf_val,$coarsen,$workload,$tc_name,$total_time,$compute_time" >> "$OUTPUT_CSV"
     done
     
     echo "------------------------------------------"
-    echo "  Grand Total Time: $grand_total_time ms"
+    echo "  Grand Total Time (Successful runs only): $grand_total_time ms"
     echo "------------------------------------------"
     echo ""
     
