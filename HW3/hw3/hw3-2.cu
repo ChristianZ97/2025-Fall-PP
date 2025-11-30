@@ -2,10 +2,9 @@
 
 /* Headers*/
 #include <cuda.h>
-
-#include <cstdio>
-#include <cstdlib>
-#include <ctime>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 /*
  * Blocked Floyd–Warshall with CUDA
@@ -41,24 +40,19 @@ void input(char *infile);
 void output(char *outfile);
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms,
-    double *time_phase2_row_ms,
-    double *time_phase2_col_ms,
-    double *time_phase3_ms,
-    long long *calls_phase1,
-    long long *calls_phase2_row,
-    long long *calls_phase2_col,
-    long long *calls_phase3
+    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
 #endif
 );
 
 /* Main */
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
-        printf("Usage: %s \n", argv[0]);
-        return 1;
-    }
+    /*
+        if (argc != 3) {
+            printf("Usage: %s \n", argv[0]);
+            return 1;
+        }
+    */
 
 #ifdef PROFILING
     // -------------------------
@@ -76,11 +70,6 @@ int main(int argc, char *argv[]) {
     double time_phase2_row_ms = 0.0;
     double time_phase2_col_ms = 0.0;
     double time_phase3_ms = 0.0;
-
-    long long calls_phase1 = 0;
-    long long calls_phase2_row = 0;
-    long long calls_phase2_col = 0;
-    long long calls_phase3 = 0;
 
     // CPU-side I/O timing
     double time_io_read_ms = 0.0;
@@ -122,7 +111,7 @@ int main(int argc, char *argv[]) {
     // Kernel execution
     // -------------------------
 #ifdef PROFILING
-    block_FW(&time_phase1_ms, &time_phase2_row_ms, &time_phase2_col_ms, &time_phase3_ms, &calls_phase1, &calls_phase2_row, &calls_phase2_col, &calls_phase3);
+    block_FW(&time_phase1_ms, &time_phase2_row_ms, &time_phase2_col_ms, &time_phase3_ms);
 #else
     block_FW();
 #endif
@@ -159,7 +148,7 @@ int main(int argc, char *argv[]) {
 */
 #ifdef PROFILING
     // ============================================================
-    // Profiling report: computing / communication(H2D+D2H) / I/O
+    // Profiling result: only compact summary line
     // ============================================================
     float t_h2d_f = 0.0f, t_d2h_f = 0.0f;
     cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
@@ -167,72 +156,10 @@ int main(int argc, char *argv[]) {
     double time_h2d_ms = (double)t_h2d_f;
     double time_d2h_ms = (double)t_d2h_f;
 
-    // --- category totals ---
     double time_compute_total_ms = time_phase1_ms + time_phase2_row_ms + time_phase2_col_ms + time_phase3_ms;
     double time_comm_total_ms = time_h2d_ms + time_d2h_ms;
     double time_io_total_ms = time_io_read_ms + time_io_write_ms;
-
-    // grand total (for percentage): IO + communication + computing
     double total_time_ms = time_compute_total_ms + time_comm_total_ms + time_io_total_ms;
-
-    fprintf(stderr, "\n=== CUDA PROFILING (Blocked Floyd–Warshall, 3-phase tiled) ===\n");
-    fprintf(stderr, "V = %d, E = %d\n", V, E);
-    fprintf(stderr, "Matrix size (padded): %d x %d, total bytes = %zu (%.2f GiB)\n", V_padded, V_padded, size, (double)size / (1024.0 * 1024.0 * 1024.0));
-
-    fprintf(stderr, "\n[Overall Time]\n");
-    fprintf(stderr, "  Total time (I/O + communication + computing): %.3f ms\n", total_time_ms);
-
-    // -------------------------
-    // Computing (kernel execution)
-    // -------------------------
-    fprintf(stderr, "\n[Computing (kernel execution)]\n");
-    if (time_compute_total_ms > 0.0) {
-#define PRINT_COMP(label, t_ms) \
-    fprintf(stderr, "  %-12s: %8.3f ms, %5.1f%% of total, %5.1f%% of computing\n", label, (t_ms), 100.0 * (t_ms) / (total_time_ms + 1e-9), 100.0 * (t_ms) / (time_compute_total_ms + 1e-9))
-
-        PRINT_COMP("Phase1", time_phase1_ms);
-        PRINT_COMP("Phase2-row", time_phase2_row_ms);
-        PRINT_COMP("Phase2-col", time_phase2_col_ms);
-        PRINT_COMP("Phase3", time_phase3_ms);
-        PRINT_COMP("Compute-all", time_compute_total_ms);
-#undef PRINT_COMP
-    } else {
-        fprintf(stderr, "  (No kernel time recorded)\n");
-    }
-
-    // -------------------------
-    // Communication = memory copy (H2D, D2H)
-    // -------------------------
-    fprintf(stderr, "\n[Communication (memory copy: H2D, D2H)]\n");
-    if (time_comm_total_ms > 0.0) {
-        double h2d_pct_total = 100.0 * time_h2d_ms / (total_time_ms + 1e-9);
-        double d2h_pct_total = 100.0 * time_d2h_ms / (total_time_ms + 1e-9);
-        double h2d_pct_comm = 100.0 * time_h2d_ms / (time_comm_total_ms + 1e-9);
-        double d2h_pct_comm = 100.0 * time_d2h_ms / (time_comm_total_ms + 1e-9);
-
-        fprintf(stderr, "  H2D: %8.3f ms, %5.1f%% of total, %5.1f%% of communication\n", time_h2d_ms, h2d_pct_total, h2d_pct_comm);
-        fprintf(stderr, "  D2H: %8.3f ms, %5.1f%% of total, %5.1f%% of communication\n", time_d2h_ms, d2h_pct_total, d2h_pct_comm);
-        fprintf(stderr, "  Comm-all: %8.3f ms, %5.1f%% of total\n", time_comm_total_ms, 100.0 * time_comm_total_ms / (total_time_ms + 1e-9));
-    } else {
-        fprintf(stderr, "  (No H2D/D2H time recorded)\n");
-    }
-
-    // -------------------------
-    // I/O (input / output)
-    // -------------------------
-    fprintf(stderr, "\n[I/O (file read / write)]\n");
-    if (time_io_total_ms > 0.0) {
-        double in_pct_total = 100.0 * time_io_read_ms / (total_time_ms + 1e-9);
-        double out_pct_total = 100.0 * time_io_write_ms / (total_time_ms + 1e-9);
-        double in_pct_io = 100.0 * time_io_read_ms / (time_io_total_ms + 1e-9);
-        double out_pct_io = 100.0 * time_io_write_ms / (time_io_total_ms + 1e-9);
-
-        fprintf(stderr, "  Input : %8.3f ms, %5.1f%% of total, %5.1f%% of I/O\n", time_io_read_ms, in_pct_total, in_pct_io);
-        fprintf(stderr, "  Output: %8.3f ms, %5.1f%% of total, %5.1f%% of I/O\n", time_io_write_ms, out_pct_total, out_pct_io);
-        fprintf(stderr, "  I/O-all: %8.3f ms, %5.1f%% of total\n", time_io_total_ms, 100.0 * time_io_total_ms / (total_time_ms + 1e-9));
-    } else {
-        fprintf(stderr, "  (No I/O time recorded)\n");
-    }
 
     fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
             time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
@@ -249,14 +176,7 @@ int main(int argc, char *argv[]) {
 /* Function Definitions */
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms,
-    double *time_phase2_row_ms,
-    double *time_phase2_col_ms,
-    double *time_phase3_ms,
-    long long *calls_phase1,
-    long long *calls_phase2_row,
-    long long *calls_phase2_col,
-    long long *calls_phase3
+    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
 #endif
 ) {
     const int round = V_padded / BLOCKING_FACTOR;
@@ -285,10 +205,6 @@ void block_FW(
     *time_phase2_row_ms = 0.0;
     *time_phase2_col_ms = 0.0;
     *time_phase3_ms = 0.0;
-    *calls_phase1 = 0;
-    *calls_phase2_row = 0;
-    *calls_phase2_col = 0;
-    *calls_phase3 = 0;
 #endif
 
     // [OPT] 2D thread block (HALF_BLOCK x HALF_BLOCK) for good CUDA 2D alignment and coalesced accesses.
@@ -307,7 +223,6 @@ void block_FW(
         float t_p1 = 0.0f;
         cudaEventElapsedTime(&t_p1, e_p1_start, e_p1_stop);
         acc_p1 += t_p1;
-        (*calls_phase1)++;
 #endif
 
         // 2. Phase 2: Pivot Row (row stream)
@@ -323,7 +238,6 @@ void block_FW(
         float t_p2_row = 0.0f;
         cudaEventElapsedTime(&t_p2_row, e_p2_row_start, e_p2_row_stop);
         acc_p2_row += t_p2_row;
-        (*calls_phase2_row)++;
 #endif
 
         // 2. Phase 2: Pivot Col (col stream)
@@ -339,7 +253,6 @@ void block_FW(
         float t_p2_col = 0.0f;
         cudaEventElapsedTime(&t_p2_col, e_p2_col_start, e_p2_col_stop);
         acc_p2_col += t_p2_col;
-        (*calls_phase2_col)++;
 #endif
 
         cudaStreamWaitEvent(stream_main, event_p2_row_done, 0);
@@ -357,7 +270,6 @@ void block_FW(
         float t_p3 = 0.0f;
         cudaEventElapsedTime(&t_p3, e_p3_start, e_p3_stop);
         acc_p3 += t_p3;
-        (*calls_phase3)++;
 #endif
     }
 
