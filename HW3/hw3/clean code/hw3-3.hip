@@ -1,4 +1,4 @@
-// hw3-3.hip
+// hw3-3.cu
 
 /* Headers */
 

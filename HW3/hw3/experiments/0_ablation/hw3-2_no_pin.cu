@@ -1,11 +1,11 @@
 // hw3-2.cu
 
 /* Headers*/
-#include <cuda.h>
 
-#include <cstdio>
-#include <cstdlib>
-#include <ctime>
+#include <cuda.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 /*
  * Blocked Floyd–Warshall with CUDA
@@ -32,6 +32,7 @@ cudaStream_t stream_main, stream_row, stream_col;
 cudaEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
 
 /* Function Prototypes */
+
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded);
 __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded);
 __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded);
@@ -41,25 +42,20 @@ void input(char *infile);
 void output(char *outfile);
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms,
-    double *time_phase2_row_ms,
-    double *time_phase2_col_ms,
-    double *time_phase3_ms,
-    long long *calls_phase1,
-    long long *calls_phase2_row,
-    long long *calls_phase2_col,
-    long long *calls_phase3
+    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
 #endif
 );
 
 /* Main */
+
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
-        printf("Usage: %s \n", argv[0]);
-        return 1;
-    }
-
+    /*
+        if (argc != 3) {
+            printf("Usage: %s \n", argv[0]);
+            return 1;
+        }
+    */
 
 #ifdef PROFILING
     // -------------------------
@@ -77,11 +73,6 @@ int main(int argc, char *argv[]) {
     double time_phase2_row_ms = 0.0;
     double time_phase2_col_ms = 0.0;
     double time_phase3_ms = 0.0;
-
-    long long calls_phase1 = 0;
-    long long calls_phase2_row = 0;
-    long long calls_phase2_col = 0;
-    long long calls_phase3 = 0;
 
     // CPU-side I/O timing
     double time_io_read_ms = 0.0;
@@ -123,7 +114,7 @@ int main(int argc, char *argv[]) {
     // Kernel execution
     // -------------------------
 #ifdef PROFILING
-    block_FW(&time_phase1_ms, &time_phase2_row_ms, &time_phase2_col_ms, &time_phase3_ms, &calls_phase1, &calls_phase2_row, &calls_phase2_col, &calls_phase3);
+    block_FW(&time_phase1_ms, &time_phase2_row_ms, &time_phase2_col_ms, &time_phase3_ms);
 #else
     block_FW();
 #endif
@@ -159,7 +150,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
     // ============================================================
-    // Profiling report: computing / communication(H2D+D2H) / I/O
+    // Profiling result: only compact summary line
     // ============================================================
     float t_h2d_f = 0.0f, t_d2h_f = 0.0f;
     cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
@@ -167,81 +158,13 @@ int main(int argc, char *argv[]) {
     double time_h2d_ms = (double)t_h2d_f;
     double time_d2h_ms = (double)t_d2h_f;
 
-    // --- category totals ---
     double time_compute_total_ms = time_phase1_ms + time_phase2_row_ms + time_phase2_col_ms + time_phase3_ms;
     double time_comm_total_ms = time_h2d_ms + time_d2h_ms;
     double time_io_total_ms = time_io_read_ms + time_io_write_ms;
-
-    // grand total (for percentage): IO + communication + computing
     double total_time_ms = time_compute_total_ms + time_comm_total_ms + time_io_total_ms;
 
-    fprintf(stderr, "\n=== CUDA PROFILING (Blocked Floyd–Warshall, 3-phase tiled) ===\n");
-    fprintf(stderr, "V = %d, E = %d\n", V, E);
-    fprintf(stderr, "Matrix size (padded): %d x %d, total bytes = %zu (%.2f GiB)\n", V_padded, V_padded, size, (double)size / (1024.0 * 1024.0 * 1024.0));
-
-    fprintf(stderr, "\n[Overall Time]\n");
-    fprintf(stderr, "  Total time (I/O + communication + computing): %.3f ms\n", total_time_ms);
-
-    // -------------------------
-    // Computing (kernel execution)
-    // -------------------------
-    fprintf(stderr, "\n[Computing (kernel execution)]\n");
-    if (time_compute_total_ms > 0.0) {
-#define PRINT_COMP(label, t_ms) \
-    fprintf(stderr, "  %-12s: %8.3f ms, %5.1f%% of total, %5.1f%% of computing\n", label, (t_ms), 100.0 * (t_ms) / (total_time_ms + 1e-9), 100.0 * (t_ms) / (time_compute_total_ms + 1e-9))
-
-        PRINT_COMP("Phase1", time_phase1_ms);
-        PRINT_COMP("Phase2-row", time_phase2_row_ms);
-        PRINT_COMP("Phase2-col", time_phase2_col_ms);
-        PRINT_COMP("Phase3", time_phase3_ms);
-        PRINT_COMP("Compute-all", time_compute_total_ms);
-#undef PRINT_COMP
-    } else {
-        fprintf(stderr, "  (No kernel time recorded)\n");
-    }
-
-    // -------------------------
-    // Communication = memory copy (H2D, D2H)
-    // -------------------------
-    fprintf(stderr, "\n[Communication (memory copy: H2D, D2H)]\n");
-    if (time_comm_total_ms > 0.0) {
-        double h2d_pct_total = 100.0 * time_h2d_ms / (total_time_ms + 1e-9);
-        double d2h_pct_total = 100.0 * time_d2h_ms / (total_time_ms + 1e-9);
-        double h2d_pct_comm = 100.0 * time_h2d_ms / (time_comm_total_ms + 1e-9);
-        double d2h_pct_comm = 100.0 * time_d2h_ms / (time_comm_total_ms + 1e-9);
-
-        fprintf(stderr, "  H2D: %8.3f ms, %5.1f%% of total, %5.1f%% of communication\n", time_h2d_ms, h2d_pct_total, h2d_pct_comm);
-        fprintf(stderr, "  D2H: %8.3f ms, %5.1f%% of total, %5.1f%% of communication\n", time_d2h_ms, d2h_pct_total, d2h_pct_comm);
-        fprintf(stderr, "  Comm-all: %8.3f ms, %5.1f%% of total\n", time_comm_total_ms, 100.0 * time_comm_total_ms / (total_time_ms + 1e-9));
-    } else {
-        fprintf(stderr, "  (No H2D/D2H time recorded)\n");
-    }
-
-    // -------------------------
-    // I/O (input / output)
-    // -------------------------
-    fprintf(stderr, "\n[I/O (file read / write)]\n");
-    if (time_io_total_ms > 0.0) {
-        double in_pct_total = 100.0 * time_io_read_ms / (total_time_ms + 1e-9);
-        double out_pct_total = 100.0 * time_io_write_ms / (total_time_ms + 1e-9);
-        double in_pct_io = 100.0 * time_io_read_ms / (time_io_total_ms + 1e-9);
-        double out_pct_io = 100.0 * time_io_write_ms / (time_io_total_ms + 1e-9);
-
-        fprintf(stderr, "  Input : %8.3f ms, %5.1f%% of total, %5.1f%% of I/O\n", time_io_read_ms, in_pct_total, in_pct_io);
-        fprintf(stderr, "  Output: %8.3f ms, %5.1f%% of total, %5.1f%% of I/O\n", time_io_write_ms, out_pct_total, out_pct_io);
-        fprintf(stderr, "  I/O-all: %8.3f ms, %5.1f%% of total\n", time_io_total_ms, 100.0 * time_io_total_ms / (total_time_ms + 1e-9));
-    } else {
-        fprintf(stderr, "  (No I/O time recorded)\n");
-    }
-
-    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", 
-        total_time_ms, 
-        time_compute_total_ms, 
-        time_comm_total_ms, 
-        time_io_total_ms,
-        time_phase1_ms,
-        time_phase2_row_ms + time_phase2_col_ms,
-        time_phase3_ms);
+    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
+            time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
 
     cudaEventDestroy(event_h2d_start);
     cudaEventDestroy(event_h2d_stop);
@@ -255,16 +178,10 @@ int main(int argc, char *argv[]) {
 /* Function Definitions */
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms,
-    double *time_phase2_row_ms,
-    double *time_phase2_col_ms,
-    double *time_phase3_ms,
-    long long *calls_phase1,
-    long long *calls_phase2_row,
-    long long *calls_phase2_col,
-    long long *calls_phase3
+    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
 #endif
 ) {
+
     const int round = V_padded / BLOCKING_FACTOR;
 
 #ifdef PROFILING
@@ -291,10 +208,6 @@ void block_FW(
     *time_phase2_row_ms = 0.0;
     *time_phase2_col_ms = 0.0;
     *time_phase3_ms = 0.0;
-    *calls_phase1 = 0;
-    *calls_phase2_row = 0;
-    *calls_phase2_col = 0;
-    *calls_phase3 = 0;
 #endif
 
     // [OPT] 2D thread block (HALF_BLOCK x HALF_BLOCK) for good CUDA 2D alignment and coalesced accesses.
@@ -313,7 +226,6 @@ void block_FW(
         float t_p1 = 0.0f;
         cudaEventElapsedTime(&t_p1, e_p1_start, e_p1_stop);
         acc_p1 += t_p1;
-        (*calls_phase1)++;
 #endif
 
         // 2. Phase 2: Pivot Row (row stream)
@@ -329,7 +241,6 @@ void block_FW(
         float t_p2_row = 0.0f;
         cudaEventElapsedTime(&t_p2_row, e_p2_row_start, e_p2_row_stop);
         acc_p2_row += t_p2_row;
-        (*calls_phase2_row)++;
 #endif
 
         // 2. Phase 2: Pivot Col (col stream)
@@ -345,7 +256,6 @@ void block_FW(
         float t_p2_col = 0.0f;
         cudaEventElapsedTime(&t_p2_col, e_p2_col_start, e_p2_col_stop);
         acc_p2_col += t_p2_col;
-        (*calls_phase2_col)++;
 #endif
 
         cudaStreamWaitEvent(stream_main, event_p2_row_done, 0);
@@ -363,7 +273,6 @@ void block_FW(
         float t_p3 = 0.0f;
         cudaEventElapsedTime(&t_p3, e_p3_start, e_p3_stop);
         acc_p3 += t_p3;
-        (*calls_phase3)++;
 #endif
     }
 
@@ -434,7 +343,7 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
 
     // Shared Memory for the 64x64 block
     // [OPT] Shared memory tile + extra column (+1) to reduce global memory traffic and avoid shared memory bank conflicts.
-    __shared__ int sm[BLOCKING_FACTOR][BLOCKING_FACTOR];
+    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
 
     // Global Memory Offset for the Pivot Block (r, r)
     const int b_start = (r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
@@ -442,10 +351,10 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
     // 1. Load Global -> Shared (Each thread loads 4 ints)
     // [OPT] Coalesced global memory loads: threads in a warp read contiguous elements of each row in the 64x64 tile.
     // Access pattern: Top-Left, Top-Right, Bottom-Left, Bottom-Right relative to thread
-    sm[ty][tx] = d_D[b_start + ty * V_padded + tx];
-    sm[ty][tx + HALF_BLOCK] = d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm[ty + HALF_BLOCK][tx] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
+    sm_pivot[ty][tx] = d_D[b_start + ty * V_padded + tx];
+    sm_pivot[ty][tx + HALF_BLOCK] = d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)];
+    sm_pivot[ty + HALF_BLOCK][tx] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx];
+    sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
     // 2. Floyd-Warshall Computation within the block
@@ -453,23 +362,23 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
 #pragma unroll 32
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        const int pivot_row_val1 = sm[ty][k];
-        const int pivot_row_val2 = sm[ty + HALF_BLOCK][k];
-        const int pivot_col_val1 = sm[k][tx];
-        const int pivot_col_val2 = sm[k][tx + HALF_BLOCK];
+        const int r0 = sm_pivot[ty][k];
+        const int r1 = sm_pivot[ty + HALF_BLOCK][k];
+        const int c0 = sm_pivot[k][tx];
+        const int c1 = sm_pivot[k][tx + HALF_BLOCK];
 
-        sm[ty][tx] = min(sm[ty][tx], pivot_row_val1 + pivot_col_val1);
-        sm[ty][tx + HALF_BLOCK] = min(sm[ty][tx + HALF_BLOCK], pivot_row_val1 + pivot_col_val2);
-        sm[ty + HALF_BLOCK][tx] = min(sm[ty + HALF_BLOCK][tx], pivot_row_val2 + pivot_col_val1);
-        sm[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm[ty + HALF_BLOCK][tx + HALF_BLOCK], pivot_row_val2 + pivot_col_val2);
+        sm_pivot[ty][tx] = min(sm_pivot[ty][tx], r0 + c0);
+        sm_pivot[ty][tx + HALF_BLOCK] = min(sm_pivot[ty][tx + HALF_BLOCK], r0 + c1);
+        sm_pivot[ty + HALF_BLOCK][tx] = min(sm_pivot[ty + HALF_BLOCK][tx], r1 + c0);
+        sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK], r1 + c1);
         __syncthreads();
     }
 
     // 3. Write Shared -> Global
-    d_D[b_start + ty * V_padded + tx] = sm[ty][tx];
-    d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)] = sm[ty][tx + HALF_BLOCK];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx] = sm[ty + HALF_BLOCK][tx];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    d_D[b_start + ty * V_padded + tx] = sm_pivot[ty][tx];
+    d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty][tx + HALF_BLOCK];
+    d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_pivot[ty + HALF_BLOCK][tx];
+    d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK];
 }
 
 __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
@@ -499,26 +408,31 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
+    int reg_self[2][2];
+    reg_self[0][0] = sm_self[ty][tx];
+    reg_self[0][1] = sm_self[ty][tx + HALF_BLOCK];
+    reg_self[1][0] = sm_self[ty + HALF_BLOCK][tx];
+    reg_self[1][1] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+
 #pragma unroll 32
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        int pivot_val1, pivot_val2, self_val1, self_val2;
-        pivot_val1 = sm_pivot[ty][k];
-        pivot_val2 = sm_pivot[ty + HALF_BLOCK][k];
-        self_val1 = sm_self[k][tx];
-        self_val2 = sm_self[k][tx + HALF_BLOCK];
+        const int r0 = sm_pivot[ty][k];
+        const int r1 = sm_pivot[ty + HALF_BLOCK][k];
+        const int c0 = sm_self[k][tx];
+        const int c1 = sm_self[k][tx + HALF_BLOCK];
 
-        sm_self[ty][tx] = min(sm_self[ty][tx], pivot_val1 + self_val1);
-        sm_self[ty][tx + HALF_BLOCK] = min(sm_self[ty][tx + HALF_BLOCK], pivot_val1 + self_val2);
-        sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], pivot_val2 + self_val1);
-        sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], pivot_val2 + self_val2);
-        __syncthreads();
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
+        // __syncthreads();
     }
 
-    d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_self[ty][tx + HALF_BLOCK];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_self[ty + HALF_BLOCK][tx];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
 
 __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
@@ -548,26 +462,31 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
     sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
+    int reg_self[2][2];
+    reg_self[0][0] = sm_self[ty][tx];
+    reg_self[0][1] = sm_self[ty][tx + HALF_BLOCK];
+    reg_self[1][0] = sm_self[ty + HALF_BLOCK][tx];
+    reg_self[1][1] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+
 #pragma unroll 32
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        int pivot_val1, pivot_val2, self_val1, self_val2;
-        self_val1 = sm_self[ty][k];
-        self_val2 = sm_self[ty + HALF_BLOCK][k];
-        pivot_val1 = sm_pivot[k][tx];
-        pivot_val2 = sm_pivot[k][tx + HALF_BLOCK];
+        const int r0 = sm_self[ty][k];
+        const int r1 = sm_self[ty + HALF_BLOCK][k];
+        const int c0 = sm_pivot[k][tx];
+        const int c1 = sm_pivot[k][tx + HALF_BLOCK];
 
-        sm_self[ty][tx] = min(sm_self[ty][tx], self_val1 + pivot_val1);
-        sm_self[ty][tx + HALF_BLOCK] = min(sm_self[ty][tx + HALF_BLOCK], self_val1 + pivot_val2);
-        sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], self_val2 + pivot_val1);
-        sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], self_val2 + pivot_val2);
-        __syncthreads();
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
+        // __syncthreads();
     }
 
-    d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_self[ty][tx + HALF_BLOCK];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_self[ty + HALF_BLOCK][tx];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
 
 __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
@@ -598,28 +517,28 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
     sm_col[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[col_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-    int val[2][2];
-    val[0][0] = d_D[self_start + ty * V_padded + tx];
-    val[0][1] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
-    val[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
-    val[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
+    int reg_self[2][2];
+    reg_self[0][0] = d_D[self_start + ty * V_padded + tx];
+    reg_self[0][1] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
+    reg_self[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
+    reg_self[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
 
 #pragma unroll 32
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        const int r1 = sm_row[ty][k];
-        const int r2 = sm_row[ty + HALF_BLOCK][k];
-        const int c1 = sm_col[k][tx];
-        const int c2 = sm_col[k][tx + HALF_BLOCK];
+        const int r0 = sm_row[ty][k];
+        const int r1 = sm_row[ty + HALF_BLOCK][k];
+        const int c0 = sm_col[k][tx];
+        const int c1 = sm_col[k][tx + HALF_BLOCK];
 
-        val[0][0] = min(val[0][0], r1 + c1);
-        val[0][1] = min(val[0][1], r1 + c2);
-        val[1][0] = min(val[1][0], r2 + c1);
-        val[1][1] = min(val[1][1], r2 + c2);
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
     }
 
-    d_D[self_start + ty * V_padded + tx] = val[0][0];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = val[0][1];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = val[1][0];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = val[1][1];
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
