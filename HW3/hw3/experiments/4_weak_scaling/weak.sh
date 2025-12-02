@@ -14,7 +14,6 @@ PAIRS=(
 "p34k1 p43k1"
 "p35k1 p44k1"
 "p36k1 p45k1"
-"p40k1 p50k1"
 )
 
 TESTCASE_DIR="../../testcases"

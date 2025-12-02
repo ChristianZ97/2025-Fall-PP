@@ -4,7 +4,6 @@
 #include <hip/hip_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 /*
  * Blocked Floyd–Warshall with CUDA
@@ -40,19 +39,20 @@ void input(char *infile);
 void output(char *outfile);
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
+    double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 );
 
 /* Main */
 int main(int argc, char *argv[]) {
 
-    /*
-        if (argc != 3) {
-            printf("Usage: %s \n", argv[0]);
-            return 1;
-        }
-    */
+    if (argc != 3) {
+        printf("Usage: %s \n", argv[0]);
+        return 1;
+    }
 
 #ifdef PROFILING
     // -------------------------
@@ -161,8 +161,14 @@ int main(int argc, char *argv[]) {
     double time_io_total_ms = time_io_read_ms + time_io_write_ms;
     double total_time_ms = time_compute_total_ms + time_comm_total_ms + time_io_total_ms;
 
-    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
-            time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
+    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+            total_time_ms,
+            time_compute_total_ms,
+            time_comm_total_ms,
+            time_io_total_ms,
+            time_phase1_ms,
+            time_phase2_row_ms + time_phase2_col_ms,
+            time_phase3_ms);
 
     hipEventDestroy(event_h2d_start);
     hipEventDestroy(event_h2d_stop);
@@ -176,7 +182,10 @@ int main(int argc, char *argv[]) {
 /* Function Definitions */
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
+    double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 ) {
     const int round = V_padded / BLOCKING_FACTOR;
@@ -307,7 +316,6 @@ void input(char *infile) {
     // Note: Padding areas are also initialized to avoid side effects
 
 #pragma unroll 32
-
     for (int i = 0; i < V_padded; ++i)
         for (int j = 0; j < V_padded; ++j)
             D[i * V_padded + j] = (i == j) ? 0 : INF;
@@ -355,7 +363,6 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
     // 2. Floyd-Warshall Computation within the block
 
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         const int pivot_row_val1 = sm[ty][k];
         const int pivot_row_val2 = sm[ty + HALF_BLOCK][k];
@@ -404,7 +411,6 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     __syncthreads();
 
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         int pivot_val1, pivot_val2, self_val1, self_val2;
         pivot_val1 = sm_pivot[ty][k];
@@ -453,7 +459,6 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
     __syncthreads();
 
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         int pivot_val1, pivot_val2, self_val1, self_val2;
         self_val1 = sm_self[ty][k];
@@ -509,7 +514,6 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
     val[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
 
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         const int r1 = sm_row[ty][k];
         const int r2 = sm_row[ty + HALF_BLOCK][k];

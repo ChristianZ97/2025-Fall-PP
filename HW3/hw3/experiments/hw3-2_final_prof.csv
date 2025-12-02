@@ -1,0 +1,30 @@
+==169463== NVPROF is profiling process 169463, command: ./hw3-2 ./testcases/c21.1 temp.out
+==169463== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+==169463== Profiling application: ./hw3-2 ./testcases/c21.1 temp.out
+==169463== Profiling result:
+==169463== Metric result:
+"Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"achieved_occupancy","Achieved Occupancy",0.839448,0.904902,0.874727
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"sm_efficiency","Multiprocessor Activity",74.111703%,90.875862%,86.308006%
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"shared_load_throughput","Shared Memory Load Throughput",1510.505712GB/s,1911.873778GB/s,1761.680041GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"shared_store_throughput","Shared Memory Store Throughput",1533.744261GB/s,1941.287221GB/s,1788.782811GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"gld_throughput","Global Load Throughput",46.477099GB/s,58.826885GB/s,54.205540GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",79,"gst_throughput","Global Store Throughput",23.238549GB/s,29.413443GB/s,27.102770GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"achieved_occupancy","Achieved Occupancy",0.841107,0.913099,0.877634
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"sm_efficiency","Multiprocessor Activity",74.238852%,90.663051%,86.776326%
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"shared_load_throughput","Shared Memory Load Throughput",1509.091381GB/s,1825.050380GB/s,1780.371118GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"shared_store_throughput","Shared Memory Store Throughput",1532.308171GB/s,1853.128078GB/s,1807.761443GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"gld_throughput","Global Load Throughput",46.433581GB/s,56.155396GB/s,54.780650GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",79,"gst_throughput","Global Store Throughput",23.216790GB/s,28.077698GB/s,27.390325GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"achieved_occupancy","Achieved Occupancy",0.497390,0.497507,0.497447
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"sm_efficiency","Multiprocessor Activity",4.308450%,4.391655%,4.374856%
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"shared_load_throughput","Shared Memory Load Throughput",96.159443GB/s,98.789651GB/s,97.278750GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"shared_store_throughput","Shared Memory Store Throughput",48.452432GB/s,49.777731GB/s,49.016424GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"gld_throughput","Global Load Throughput",763.312163MB/s,784.190715MB/s,772.197162MB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",79,"gst_throughput","Global Store Throughput",763.312163MB/s,784.190715MB/s,772.197162MB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"achieved_occupancy","Achieved Occupancy",0.907871,0.910928,0.909543
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"sm_efficiency","Multiprocessor Activity",99.447292%,99.639344%,99.545795%
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"shared_load_throughput","Shared Memory Load Throughput",3282.581161GB/s,3322.446059GB/s,3301.024687GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"shared_store_throughput","Shared Memory Store Throughput",136.774215GB/s,138.435252GB/s,137.542695GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"gld_throughput","Global Load Throughput",205.161323GB/s,207.652879GB/s,206.314043GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",79,"gst_throughput","Global Store Throughput",68.387108GB/s,69.217626GB/s,68.771348GB/s
