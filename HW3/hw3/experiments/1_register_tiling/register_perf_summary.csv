@@ -1,0 +1,3 @@
+Version,RegisterTiling,GrandTotalTime_ms,TotalComputeTime_ms
+hw3-2_reg_off,off,843023.107,647319.459
+hw3-2_reg_on,on,760872.383,582169.148

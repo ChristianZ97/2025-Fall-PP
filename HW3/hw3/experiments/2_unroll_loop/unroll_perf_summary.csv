@@ -1,0 +1,8 @@
+Version,UnrollFactor,GrandTotalTime_ms,TotalComputeTime_ms
+hw3-2_unroll_16,16,801520.121,604937.715
+hw3-2_unroll_32,32,771674.527,575498.594
+hw3-2_unroll_4,4,799011.563,617716.091
+hw3-2_unroll_64,64,793091.285,605573.490
+hw3-2_unroll_8,8,789532.917,599019.636
+hw3-2_unroll_default,default,793567.279,617411.442
+hw3-2_unroll_none,none,832915.448,607783.638

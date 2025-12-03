@@ -1,5 +1,5 @@
 Version,AblationTarget,GrandTotalTime_ms,TotalComputeTime_ms,TotalCommTime_ms
-hw3-2_final,Baseline(Final),757926.566,586684.545,13906.332
-hw3-2_no_pin,NoPinnedMemory,751318.245,594875.195,38946.282
-hw3-2_no_stream,NoStreams,776504.065,591671.426,13715.400
-hw3-2_padding,PaddingVariant,946663.658,711165.430,13750.261
+hw3-2_final,Baseline(Final),767529.081,586841.016,13814.643
+hw3-2_no_pin,NoPinnedMemory,752470.042,584702.625,39507.889
+hw3-2_no_stream,NoStreams,801144.400,582796.772,13781.078
+hw3-2_padding,PaddingVariant,906620.481,719473.233,13967.637

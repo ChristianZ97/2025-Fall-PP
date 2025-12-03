@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FlashAttention Algorithm 1 Animation</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #050816;
+      color: #f9fafb;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-top: 16px;
+      font-size: 24px;
+    }
+    #container {
+      display: flex;
+      margin-top: 8px;
+      gap: 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #020617;
+      box-shadow: 0 0 0 1px #1e293b;
+    }
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+    .matrix {
+      display: grid;
+      gap: 2px;
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      background: #020617;
+      font-size: 10px;
+    }
+    .cell {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    .label {
+      font-size: 12px;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      color: #e5e7eb;
+    }
+    #hbm, #sram {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px dashed #334155;
+      background: rgba(15,23,42,0.7);
+      position: relative;
+      min-width: 180px;
+    }
+    #hbm::before {
+      content: "HBM";
+      position: absolute;
+      top: -10px;
+      left: 8px;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #f97316;
+      color: #020617;
+      font-weight: 600;
+    }
+    #sram::before {
+      content: "on-chip SRAM (size M)";
+      position: absolute;
+      top: -10px;
+      left: 8px;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      color: #020617;
+      font-weight: 600;
+    }
+    .arrow {
+      font-size: 16px;
+      margin: 4px 0;
+      text-align: center;
+    }
+    #log {
+      margin-top: 10px;
+      width: 90vw;
+      max-width: 960px;
+      height: 140px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      font-size: 11px;
+      background: #020617;
+      border-radius: 8px;
+      box-shadow: 0 0 0 1px #1f2937 inset;
+      white-space: pre-wrap;
+    }
+    #controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: none;
+      background: #4f46e5;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .highlight {
+      outline: 2px solid #eab308;
+      box-shadow: 0 0 10px rgba(234,179,8,0.7);
+    }
+    .secondary {
+      background: #0f172a;
+      border: 1px solid #334155;
+    }
+  </style>
+</head>
+<body>
+<h1>FlashAttention – Algorithm 1 (Forward)</h1>
+
+<div id="container">
+  <div class="column">
+    <span class="tag">Matrices in HBM</span>
+    <div id="hbm">
+      <div class="label">Q, K, V, O, ℓ, m ∈ HBM</div>
+      <div id="hbm-mats" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+  <div class="column">
+    <div class="arrow">⟶ tiled load ⟶</div>
+    <div id="sram">
+      <div class="label">On-chip tile: Qᵢ, Kⱼ, Vⱼ, Oᵢ, ℓᵢ, mᵢ</div>
+      <div id="sram-mats" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+  <div class="column">
+    <span class="tag">Output blocks</span>
+    <div class="matrix secondary" id="O-view"></div>
+    <div class="label">O ∈ ℝ<sup>N×d</sup></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="btn-start">▶ 依序執行 Algorithm 1</button>
+  <button id="btn-step">下一步</button>
+  <button id="btn-reset">重設</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+/*
+  符號對應原始 FlashAttention Algorithm 1：
+  Q, K, V ∈ ℝ^{N×d} 於 HBM
+  O ∈ ℝ^{N×d}, ℓ ∈ ℝ^N, m ∈ ℝ^N 於 HBM
+  B_c, B_r: column / row block sizes
+  T_c = ⌈N / B_c⌉, T_r = ⌈N / B_r⌉
+  K_j, V_j: 第 j 個 column block
+  Q_i, O_i, ℓ_i, m_i: 第 i 個 row block
+  演算法主迴圈：
+    for j = 1…T_c:
+      載入 K_j, V_j
+      for i = 1…T_r:
+        載入 Q_i, O_i, ℓ_i, m_i
+        S_ij = Q_i K_jᵀ   (on chip)
+        依 online softmax 更新 m̃_ij, ℓ̃_ij
+        O_i,new ← …
+        回寫 O_i, ℓ_i, m_i
+*/
+
+/*************** 參數與資料初始化 ***************/
+const N = 6;   // 簡化：序列長度 N
+const d = 4;   // head 維度 d
+const Bc = 3;  // block size B_c
+const Br = 3;  // block size B_r
+const Tc = Math.ceil(N / Bc);
+const Tr = Math.ceil(N / Br);
+
+// 產生小隨機矩陣做視覺化（不影響公式符號）
+function randMatrix(rows, cols) {
+  const m = [];
+  for (let r = 0; r < rows; r++) {
+    const row = [];
+    for (let c = 0; c < cols; c++) {
+      row.push((Math.random() * 2 - 1).toFixed(1));
+    }
+    m.push(row);
+  }
+  return m;
+}
+
+// 儲存於「HBM」的變數
+let Q, K, V, O, ell, m;
+
+// 動畫狀態
+let currentStep = 0;
+let running = false;
+let stepQueue = [];
+
+/*************** DOM 幫手 ***************/
+const hbmMatsDiv = document.getElementById("hbm-mats");
+const sramMatsDiv = document.getElementById("sram-mats");
+const OView = document.getElementById("O-view");
+const logDiv = document.getElementById("log");
+const btnStart = document.getElementById("btn-start");
+const btnStep = document.getElementById("btn-step");
+const btnReset = document.getElementById("btn-reset");
+
+function log(msg) {
+  logDiv.textContent += msg + "\n";
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function clearSRAM() {
+  sramMatsDiv.innerHTML = "";
+}
+
+function createMatrixElement(name, rows, cols, data, highlighted = false) {
+  const wrapper = document.createElement("div");
+  const label = document.createElement("div");
+  label.className = "label";
+  label.innerHTML = name;
+  const grid = document.createElement("div");
+  grid.className = "matrix";
+  grid.style.gridTemplateColumns = `repeat(${cols}, 18px)`;
+  if (highlighted) grid.classList.add("highlight");
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.textContent = data ? data[r][c] : "";
+      grid.appendChild(cell);
+    }
+  }
+  wrapper.appendChild(label);
+  wrapper.appendChild(grid);
+  return wrapper;
+}
+
+function renderHBM() {
+  hbmMatsDiv.innerHTML = "";
+  hbmMatsDiv.appendChild(createMatrixElement("Q", N, d, Q));
+  hbmMatsDiv.appendChild(createMatrixElement("K", N, d, K));
+  hbmMatsDiv.appendChild(createMatrixElement("V", N, d, V));
+  hbmMatsDiv.appendChild(createMatrixElement("O", N, d, O));
+}
+
+function renderOView() {
+  OView.innerHTML = "";
+  OView.style.gridTemplateColumns = `repeat(${d}, 18px)`;
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < d; j++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.textContent = O[i][j].toFixed(1);
+      OView.appendChild(cell);
+    }
+  }
+}
+
+/*************** 核心數學操作（對應 Algorithm 1） ***************/
+function matMul(A, B) {
+  const n = A.length, k = A[0].length, m2 = B[0].length;
+  const out = Array.from({ length: n }, () => Array(m2).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let t = 0; t < k; t++) {
+      for (let j = 0; j < m2; j++) {
+        out[i][j] += A[i][t] * B[t][j];
+      }
+    }
+  }
+  return out;
+}
+
+function softmaxRowOnline(S, mPrev, lPrev) {
+  // S: shape Br × Bc (注意：只是一個 tile)
+  const BrLocal = S.length;
+  const BcLocal = S[0].length;
+  const mNew = [];
+  const lNew = [];
+  const P = Array.from({ length: BrLocal }, () => Array(BcLocal).fill(0));
+
+  for (let i = 0; i < BrLocal; i++) {
+    const row = S[i];
+    let mRow = -Infinity;
+    for (let j = 0; j < BcLocal; j++) {
+      if (row[j] > mRow) mRow = row[j];
+    }
+    const mTilde = Math.max(mPrev[i], mRow);
+    let lRow = 0;
+    for (let j = 0; j < BcLocal; j++) {
+      const e = Math.exp(row[j] - mTilde);
+      P[i][j] = e;
+      lRow += e;
+    }
+    const lTilde = Math.exp(mPrev[i] - mTilde) * lPrev[i] + lRow;
+    mNew[i] = mTilde;
+    lNew[i] = lTilde;
+    for (let j = 0; j < BcLocal; j++) {
+      P[i][j] /= lTilde;
+    }
+  }
+  return { P, mNew, lNew };
+}
+
+/*************** 動畫步驟構建（對應演算法行號） ***************/
+function buildSteps() {
+  stepQueue = [];
+  clearSRAM();
+  renderHBM();
+  renderOView();
+  logDiv.textContent = "";
+
+  // Step 1–4：區塊設定與分割（用敘述呈現）
+  stepQueue.push(() => {
+    log("Step 1: Choose block sizes B_c, B_r and derive T_c = ⌈N/B_c⌉, T_r = ⌈N/B_r⌉.");
+  });
+  stepQueue.push(() => {
+    log(`Step 2–4: Divide Q into T_r row blocks, K,V into T_c column blocks; O, ℓ, m follow the same row blocking.`);
+  });
+
+  // 之後依 j, i 逐 tile 執行
+  for (let j = 0; j < Tc; j++) {
+    stepQueue.push(((jj) => () => {
+      clearSRAM();
+      const jStart = jj * Bc;
+      const jEnd = Math.min(N, jStart + Bc);
+      const Ktile = K.slice(jStart, jEnd);
+      const Vtile = V.slice(jStart, jEnd);
+      sramMatsDiv.appendChild(
+        createMatrixElement(`K_${jj+1}`, Ktile.length, d, Ktile, true)
+      );
+      sramMatsDiv.appendChild(
+        createMatrixElement(`V_${jj+1}`, Vtile.length, d, Vtile, true)
+      );
+      log(`Load K_${jj+1}, V_${jj+1} from HBM to on-chip SRAM (column block j = ${jj+1}).`);
+    })(j));
+
+    for (let i = 0; i < Tr; i++) {
+      stepQueue.push(((jj, ii) => () => {
+        clearSRAM();
+        const iStart = ii * Br;
+        const iEnd = Math.min(N, iStart + Br);
+        const jStart = jj * Bc;
+        const jEnd = Math.min(N, jStart + Bc);
+
+        const Qtile = Q.slice(iStart, iEnd);
+        const Otile = O.slice(iStart, iEnd);
+        const ellTile = ell.slice(iStart, iEnd);
+        const mTile = m.slice(iStart, iEnd);
+        const Ktile = K.slice(jStart, jEnd);
+        const Vtile = V.slice(jStart, jEnd);
+
+        sramMatsDiv.appendChild(
+          createMatrixElement(`Q_${ii+1}`, Qtile.length, d, Qtile, true)
+        );
+        sramMatsDiv.appendChild(
+          createMatrixElement(`K_${jj+1}`, Ktile.length, d, Ktile)
+        );
+        sramMatsDiv.appendChild(
+          createMatrixElement(`V_${jj+1}`, Vtile.length, d, Vtile)
+        );
+        sramMatsDiv.appendChild(
+          createMatrixElement(`O_${ii+1}`, Otile.length, d, Otile)
+        );
+        log(`Load Q_${ii+1}, O_${ii+1}, ℓ_${ii+1}, m_${ii+1} and K_${jj+1}, V_${jj+1} to SRAM (row block i = ${ii+1}).`);
+
+        // On-chip: S_ij = Q_i K_j^T
+        const Kt = Ktile.map((row, idxRow) =>
+          row.map((_, idxCol) => Ktile[idxRow][idxCol])
+        );
+        // 轉置
+        const KtT = [];
+        for (let col = 0; col < d; col++) {
+          const colArr = [];
+          for (let row = 0; row < Ktile.length; row++) {
+            colArr.push(Ktile[row][col]);
+          }
+          KtT.push(colArr);
+        }
+        const S_ij = matMul(Qtile, KtT);
+        sramMatsDiv.appendChild(
+          createMatrixElement("S_ij = Q_i K_jᵀ", S_ij.length, S_ij[0].length, S_ij)
+        );
+        log("On chip: compute S_ij = Q_i K_jᵀ.");
+
+        // Online softmax（對應 ℓ, m 更新）
+        const { P, mNew, lNew } = softmaxRowOnline(S_ij, mTile, ellTile);
+        sramMatsDiv.appendChild(
+          createMatrixElement("P_ij (softmax tile)", P.length, P[0].length, P)
+        );
+        log("On chip: apply online softmax to update m_i, ℓ_i and get normalized P_ij.");
+
+        // O_i,new = e^(m_old - m_new) O_i + P_ij V_j
+        const scaledO = Otile.map((row, r) =>
+          row.map(val => val * Math.exp(mTile[r] - mNew[r]))
+        );
+        const Oupdate = matMul(P, Vtile);
+
+        const Onew = scaledO.map((row, r) =>
+          row.map((val, c) => val + Oupdate[r][c])
+        );
+        sramMatsDiv.appendChild(
+          createMatrixElement("O_i,new", Onew.length, Onew[0].length, Onew, true)
+        );
+        log("On chip: update O_i using previous O_i, m_i, ℓ_i and current tile P_ij, V_j.");
+
+        // 回寫到 HBM
+        for (let r = iStart; r < iEnd; r++) {
+          O[r] = Onew[r - iStart];
+          ell[r] = lNew[r - iStart];
+          m[r] = mNew[r - iStart];
+        }
+        renderHBM();
+        renderOView();
+        log("Write back O_i, ℓ_i, m_i to HBM.");
+      })(j, i));
+    }
+  }
+
+  stepQueue.push(() => {
+    log("Algorithm finished. Return O.");
+  });
+}
+
+/*************** 控制與重設 ***************/
+function resetAll() {
+  Q = randMatrix(N, d);
+  K = randMatrix(N, d);
+  V = randMatrix(N, d);
+  O = Array.from({ length: N }, () => Array(d).fill(0));
+  ell = Array(N).fill(0);     // ℓ initialized to 0
+  m = Array(N).fill(-Infinity); // m initialized to −∞
+  currentStep = 0;
+  running = false;
+  btnStart.disabled = false;
+  btnStep.disabled = false;
+  buildSteps();
+}
+
+function runNextStep() {
+  if (currentStep >= stepQueue.length) {
+    running = false;
+    btnStart.disabled = true;
+    btnStep.disabled = true;
+    return;
+  }
+  const fn = stepQueue[currentStep];
+  currentStep += 1;
+  fn();
+}
+
+btnStart.onclick = async () => {
+  if (running) return;
+  running = true;
+  btnStart.disabled = true;
+  while (running && currentStep < stepQueue.length) {
+    runNextStep();
+    await new Promise(r => setTimeout(r, 900));
+  }
+};
+btnStep.onclick = () => {
+  running = false;
+  runNextStep();
+};
+btnReset.onclick = () => {
+  resetAll();
+};
+
+resetAll();
+</script>
+</body>
+</html>

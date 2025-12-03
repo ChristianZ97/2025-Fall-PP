@@ -34,11 +34,10 @@ void output(char *outfile);
 
 void block_FW(const int dev_id
 #ifdef PROFILING
-              ,
-              double *time_phase1_ms,
-              double *time_phase2_row_ms,
-              double *time_phase2_col_ms,
-              double *time_phase3_ms
+    , double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 );
 
@@ -46,25 +45,36 @@ void block_FW(const int dev_id
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
-        printf("Usage: %s <input> <output>\n", argv[0]);
-        return 1;
-    }
+    /*
+        if (argc != 3) {
+            printf("Usage: %s <input> <output>\n", argv[0]);
+            return 1;
+        }
+    */
 
 #ifdef PROFILING
+    // -------------------------
+    // Host-side CUDA events for H2D / D2H
+    // -------------------------
+    cudaEvent_t event_h2d_start, event_h2d_stop;
+    cudaEvent_t event_d2h_start, event_d2h_stop;
+    cudaEventCreate(&event_h2d_start);
+    cudaEventCreate(&event_h2d_stop);
+    cudaEventCreate(&event_d2h_start);
+    cudaEventCreate(&event_d2h_stop);
+
+    // Phase-wise timing aggregates (device kernels)
+    double time_phase1_ms = 0.0;
+    double time_phase2_row_ms = 0.0;
+    double time_phase2_col_ms = 0.0;
+    double time_phase3_ms = 0.0;
+
+    // CPU-side I/O timing
     double time_io_read_ms = 0.0;
     double time_io_write_ms = 0.0;
+#endif
 
-    // Phase-wise timing on both devices
-    double time_phase1_ms[2] = {0.0, 0.0};
-    double time_phase2_row_ms[2] = {0.0, 0.0};
-    double time_phase2_col_ms[2] = {0.0, 0.0};
-    double time_phase3_ms[2] = {0.0, 0.0};
-
-    // H2D / D2H per device
-    double time_h2d_ms[2] = {0.0, 0.0};
-    double time_d2h_ms[2] = {0.0, 0.0};
-
+#ifdef PROFILING
     clock_t io_read_start = clock();
     input(argv[1]);
     clock_t io_read_end = clock();
@@ -82,6 +92,10 @@ int main(int argc, char *argv[]) {
     cudaSetDevice(1);
     cudaDeviceEnablePeerAccess(0, 0);
 
+#ifdef PROFILING
+    cudaEventRecord(event_h2d_start);
+#endif
+
 #pragma omp parallel num_threads(2)
     {
         const int dev_id = omp_get_thread_num();
@@ -98,48 +112,51 @@ int main(int argc, char *argv[]) {
 
         cudaMalloc(&d_D[dev_id], size);
 
-#ifdef PROFILING
-        // Host-device transfer timing per device
-        cudaEvent_t event_h2d_start, event_h2d_stop;
-        cudaEvent_t event_d2h_start, event_d2h_stop;
-
-        cudaEventCreate(&event_h2d_start);
-        cudaEventCreate(&event_h2d_stop);
-        cudaEventCreate(&event_d2h_start);
-        cudaEventCreate(&event_d2h_stop);
-
-        cudaEventRecord(event_h2d_start);
-#endif
         // H2D: copy full matrix to each GPU
         cudaMemcpy(d_D[dev_id], D, size, cudaMemcpyHostToDevice);
-#ifdef PROFILING
-        cudaEventRecord(event_h2d_stop);
-        cudaEventSynchronize(event_h2d_stop);
-
-        float t_h2d_f = 0.0f;
-        cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
-        time_h2d_ms[dev_id] = (double)t_h2d_f;
-#endif
 
 #pragma omp barrier
 
 #ifdef PROFILING
-        double t_p1 = 0.0;
-        double t_p2r = 0.0;
-        double t_p2c = 0.0;
-        double t_p3 = 0.0;
+        if (dev_id == 0) {
+            cudaEventRecord(event_h2d_stop);
+            cudaEventSynchronize(event_h2d_stop);
+        }
+#endif
 
-        block_FW(dev_id, &t_p1, &t_p2r, &t_p2c, &t_p3);
+        // Aggregation arrays for per-device phase timing
+#ifdef PROFILING
+        double time_phase1_ms_local = 0.0;
+        double time_phase2_row_ms_local = 0.0;
+        double time_phase2_col_ms_local = 0.0;
+        double time_phase3_ms_local = 0.0;
 
-        time_phase1_ms[dev_id] = t_p1;
-        time_phase2_row_ms[dev_id] = t_p2r;
-        time_phase2_col_ms[dev_id] = t_p2c;
-        time_phase3_ms[dev_id] = t_p3;
+        block_FW(dev_id, &time_phase1_ms_local, &time_phase2_row_ms_local, &time_phase2_col_ms_local, &time_phase3_ms_local);
 #else
         block_FW(dev_id);
 #endif
 
         cudaDeviceSynchronize();
+
+#ifdef PROFILING
+        if (dev_id == 0) {
+            time_phase1_ms += time_phase1_ms_local;
+            time_phase2_row_ms += time_phase2_row_ms_local;
+            time_phase2_col_ms += time_phase2_col_ms_local;
+            time_phase3_ms += time_phase3_ms_local;
+        } else {
+            time_phase1_ms += time_phase1_ms_local;
+            time_phase2_row_ms += time_phase2_row_ms_local;
+            time_phase2_col_ms += time_phase2_col_ms_local;
+            time_phase3_ms += time_phase3_ms_local;
+        }
+
+        if (dev_id == 0) {
+            cudaEventRecord(event_d2h_start);
+        }
+
+#pragma omp barrier
+#endif
 
         const int round = V_padded / BLOCKING_FACTOR;
         const int row_mid = round / 2;
@@ -148,24 +165,8 @@ int main(int argc, char *argv[]) {
         const int row_start = row_block_start * BLOCKING_FACTOR;
         const int row_num = row_block_count * BLOCKING_FACTOR;
 
-#ifdef PROFILING
-        cudaEventRecord(event_d2h_start);
-#endif
         // Copy back only the owned rows from each GPU
         cudaMemcpy(D + (size_t)row_start * V_padded, d_D[dev_id] + (size_t)row_start * V_padded, (size_t)row_num * V_padded * sizeof(int), cudaMemcpyDeviceToHost);
-#ifdef PROFILING
-        cudaEventRecord(event_d2h_stop);
-        cudaEventSynchronize(event_d2h_stop);
-
-        float t_d2h_f = 0.0f;
-        cudaEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
-        time_d2h_ms[dev_id] = (double)t_d2h_f;
-
-        cudaEventDestroy(event_h2d_start);
-        cudaEventDestroy(event_h2d_stop);
-        cudaEventDestroy(event_d2h_start);
-        cudaEventDestroy(event_d2h_stop);
-#endif
 
         cudaFree(d_D[dev_id]);
 
@@ -176,6 +177,15 @@ int main(int argc, char *argv[]) {
         cudaEventDestroy(event_p1_done[dev_id]);
         cudaEventDestroy(event_p2_row_done[dev_id]);
         cudaEventDestroy(event_p2_col_done[dev_id]);
+
+#ifdef PROFILING
+        if (dev_id == 0) {
+            cudaEventRecord(event_d2h_stop);
+            cudaEventSynchronize(event_d2h_stop);
+        }
+
+#pragma omp barrier
+#endif
     }  // end parallel region
 
 #ifdef PROFILING
@@ -188,24 +198,34 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef PROFILING
-    // Aggregate results over 2 devices
-    double time_phase1_total = time_phase1_ms[0] + time_phase1_ms[1];
-    double time_phase2_row_total = time_phase2_row_ms[0] + time_phase2_row_ms[1];
-    double time_phase2_col_total = time_phase2_col_ms[0] + time_phase2_col_ms[1];
-    double time_phase3_total = time_phase3_ms[0] + time_phase3_ms[1];
+    // ============================================================
+    // Profiling result: only compact summary line
+    // ============================================================
+    float t_h2d_f = 0.0f, t_d2h_f = 0.0f;
+    cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
+    cudaEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
+    double time_h2d_ms = (double)t_h2d_f;
+    double time_d2h_ms = (double)t_d2h_f;
 
-    double time_h2d_total = time_h2d_ms[0] + time_h2d_ms[1];
-    double time_d2h_total = time_d2h_ms[0] + time_d2h_ms[1];
-
-    double time_compute_total_ms = time_phase1_total + time_phase2_row_total + time_phase2_col_total + time_phase3_total;
-    double time_comm_total_ms = time_h2d_total + time_d2h_total;
+    double time_compute_total_ms = time_phase1_ms + time_phase2_row_ms + time_phase2_col_ms + time_phase3_ms;
+    double time_comm_total_ms = time_h2d_ms + time_d2h_ms;
     double time_io_total_ms = time_io_read_ms + time_io_write_ms;
     double total_time_ms = time_compute_total_ms + time_comm_total_ms + time_io_total_ms;
 
-    // Same compact CSV-style line as hw3-2.cu
-    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_total,
-            time_phase2_row_total + time_phase2_col_total, time_phase3_total);
-#endif
+    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+            total_time_ms,
+            time_compute_total_ms,
+            time_comm_total_ms,
+            time_io_total_ms,
+            time_phase1_ms,
+            time_phase2_row_ms + time_phase2_col_ms,
+            time_phase3_ms);
+
+    cudaEventDestroy(event_h2d_start);
+    cudaEventDestroy(event_h2d_stop);
+    cudaEventDestroy(event_d2h_start);
+    cudaEventDestroy(event_d2h_stop);
+#endif  // PROFILING
 
     return 0;
 }
@@ -214,13 +234,13 @@ int main(int argc, char *argv[]) {
 
 void block_FW(const int dev_id
 #ifdef PROFILING
-              ,
-              double *time_phase1_ms,
-              double *time_phase2_row_ms,
-              double *time_phase2_col_ms,
-              double *time_phase3_ms
+    , double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 ) {
+
     const int round = V_padded / BLOCKING_FACTOR;
     dim3 threads_per_block(HALF_BLOCK, HALF_BLOCK);
 
@@ -238,7 +258,6 @@ void block_FW(const int dev_id
     cudaEvent_t e_p2_row_start, e_p2_row_stop;
     cudaEvent_t e_p2_col_start, e_p2_col_stop;
     cudaEvent_t e_p3_start, e_p3_stop;
-
     cudaEventCreate(&e_p1_start);
     cudaEventCreate(&e_p1_stop);
     cudaEventCreate(&e_p2_row_start);
@@ -264,10 +283,10 @@ void block_FW(const int dev_id
 
         // Phase 1 + Phase 2 row on owner device
         if (dev_id == owner_id) {
+            // Phase 1: Pivot block
 #ifdef PROFILING
             cudaEventRecord(e_p1_start, stream_main[dev_id]);
 #endif
-            // Phase 1: Pivot block
             kernel_phase1<<<1, threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded);
             cudaEventRecord(event_p1_done[dev_id], stream_main[dev_id]);
 #ifdef PROFILING
@@ -280,10 +299,10 @@ void block_FW(const int dev_id
 
             cudaStreamWaitEvent(stream_row[dev_id], event_p1_done[dev_id], 0);
 
+            // Phase 2: Pivot row
 #ifdef PROFILING
             cudaEventRecord(e_p2_row_start, stream_row[dev_id]);
 #endif
-            // Phase 2: Pivot row
             kernel_phase2_row<<<grid_p2_row, threads_per_block, 0, stream_row[dev_id]>>>(d_D[dev_id], r, V_padded);
             cudaEventRecord(event_p2_row_done[dev_id], stream_row[dev_id]);
 #ifdef PROFILING
@@ -397,43 +416,44 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
     const int tx = threadIdx.x;  // 0..31
     const int ty = threadIdx.y;  // 0..31
 
-    // Shared Memory for the 64x64 block (+1 to mitigate bank conflict if desired)
-    __shared__ int sm[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
+    // Shared Memory for the 64x64 block
+    // [OPT] Shared memory tile + extra column (+1) to reduce global memory traffic and avoid shared memory bank conflicts.
+    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
 
-    // Global memory offset for the pivot block (r, r)
-    const size_t b_start = (size_t)(r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
+    // Global Memory Offset for the Pivot Block (r, r)
+    const int b_start = (r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
 
-    // 1. Load Global -> Shared (each thread loads 4 ints)
-    sm[ty][tx] = d_D[b_start + ty * V_padded + tx];
-    sm[ty][tx + HALF_BLOCK] = d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm[ty + HALF_BLOCK][tx] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
+    // 1. Load Global -> Shared (Each thread loads 4 ints)
+    // [OPT] Coalesced global memory loads: threads in a warp read contiguous elements of each row in the 64x64 tile.
+    // Access pattern: Top-Left, Top-Right, Bottom-Left, Bottom-Right relative to thread
+    sm_pivot[ty][tx] = d_D[b_start + ty * V_padded + tx];
+    sm_pivot[ty][tx + HALF_BLOCK] = d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)];
+    sm_pivot[ty + HALF_BLOCK][tx] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx];
+    sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-    // 2. Floyd–Warshall computation within the block
+    // 2. Floyd-Warshall Computation within the block
 
 #pragma unroll 32
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        const int pivot_row_val1 = sm[ty][k];
-        const int pivot_row_val2 = sm[ty + HALF_BLOCK][k];
-        const int pivot_col_val1 = sm[k][tx];
-        const int pivot_col_val2 = sm[k][tx + HALF_BLOCK];
+        const int r0 = sm_pivot[ty][k];
+        const int r1 = sm_pivot[ty + HALF_BLOCK][k];
+        const int c0 = sm_pivot[k][tx];
+        const int c1 = sm_pivot[k][tx + HALF_BLOCK];
 
-        sm[ty][tx] = min(sm[ty][tx], pivot_row_val1 + pivot_col_val1);
-        sm[ty][tx + HALF_BLOCK] = min(sm[ty][tx + HALF_BLOCK], pivot_row_val1 + pivot_col_val2);
-        sm[ty + HALF_BLOCK][tx] = min(sm[ty + HALF_BLOCK][tx], pivot_row_val2 + pivot_col_val1);
-        sm[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm[ty + HALF_BLOCK][tx + HALF_BLOCK], pivot_row_val2 + pivot_col_val2);
-
+        sm_pivot[ty][tx] = min(sm_pivot[ty][tx], r0 + c0);
+        sm_pivot[ty][tx + HALF_BLOCK] = min(sm_pivot[ty][tx + HALF_BLOCK], r0 + c1);
+        sm_pivot[ty + HALF_BLOCK][tx] = min(sm_pivot[ty + HALF_BLOCK][tx], r1 + c0);
+        sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK], r1 + c1);
         __syncthreads();
     }
 
     // 3. Write Shared -> Global
-    d_D[b_start + ty * V_padded + tx] = sm[ty][tx];
-    d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)] = sm[ty][tx + HALF_BLOCK];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx] = sm[ty + HALF_BLOCK][tx];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    d_D[b_start + ty * V_padded + tx] = sm_pivot[ty][tx];
+    d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty][tx + HALF_BLOCK];
+    d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_pivot[ty + HALF_BLOCK][tx];
+    d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK];
 }
 
 __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
@@ -442,7 +462,6 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
-
     const int b_idx_y = r;
 
     __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
@@ -465,26 +484,31 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
 
     __syncthreads();
 
+    int reg_self[2][2];
+    reg_self[0][0] = sm_self[ty][tx];
+    reg_self[0][1] = sm_self[ty][tx + HALF_BLOCK];
+    reg_self[1][0] = sm_self[ty + HALF_BLOCK][tx];
+    reg_self[1][1] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        int pivot_val1 = sm_pivot[ty][k];
-        int pivot_val2 = sm_pivot[ty + HALF_BLOCK][k];
-        int self_val1 = sm_self[k][tx];
-        int self_val2 = sm_self[k][tx + HALF_BLOCK];
+        const int r0 = sm_pivot[ty][k];
+        const int r1 = sm_pivot[ty + HALF_BLOCK][k];
+        const int c0 = sm_self[k][tx];
+        const int c1 = sm_self[k][tx + HALF_BLOCK];
 
-        sm_self[ty][tx] = min(sm_self[ty][tx], pivot_val1 + self_val1);
-        sm_self[ty][tx + HALF_BLOCK] = min(sm_self[ty][tx + HALF_BLOCK], pivot_val1 + self_val2);
-        sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], pivot_val2 + self_val1);
-        sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], pivot_val2 + self_val2);
-
-        __syncthreads();
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
+        // no syncthreads needed here
     }
 
-    d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_self[ty][tx + HALF_BLOCK];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_self[ty + HALF_BLOCK][tx];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    // Write back
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
 
 __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, const int row_offset, const int row_limit) {
@@ -492,7 +516,7 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, con
     const int ty = threadIdx.y;
 
     const int b_idx_y = blockIdx.x + row_offset;
-    if (b_idx_y == r || b_idx_y >= row_offset + row_limit) return;
+    if (b_idx_y == r || b_idx_y >= row_offset + row_limit) return;  // Skip pivot block and out-of-range blocks
 
     const int b_idx_x = r;
 
@@ -516,32 +540,38 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, con
 
     __syncthreads();
 
+    int reg_self[2][2];
+    reg_self[0][0] = sm_self[ty][tx];
+    reg_self[0][1] = sm_self[ty][tx + HALF_BLOCK];
+    reg_self[1][0] = sm_self[ty + HALF_BLOCK][tx];
+    reg_self[1][1] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        int pivot_val1 = sm_pivot[k][tx];
-        int pivot_val2 = sm_pivot[k][tx + HALF_BLOCK];
-        int self_val1 = sm_self[ty][k];
-        int self_val2 = sm_self[ty + HALF_BLOCK][k];
+        const int r0 = sm_self[ty][k];
+        const int r1 = sm_self[ty + HALF_BLOCK][k];
+        const int c0 = sm_pivot[k][tx];
+        const int c1 = sm_pivot[k][tx + HALF_BLOCK];
 
-        sm_self[ty][tx] = min(sm_self[ty][tx], self_val1 + pivot_val1);
-        sm_self[ty][tx + HALF_BLOCK] = min(sm_self[ty][tx + HALF_BLOCK], self_val1 + pivot_val2);
-        sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], self_val2 + pivot_val1);
-        sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], self_val2 + pivot_val2);
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
+        // no syncthreads needed here
     }
 
     // Write back
-    d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_self[ty][tx + HALF_BLOCK];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_self[ty + HALF_BLOCK][tx];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
 
 __global__ void kernel_phase3(int *d_D, const int r, const int V_padded, const int row_offset) {
     const int b_idx_x = blockIdx.x;
     const int b_idx_y = blockIdx.y + row_offset;
 
-    if (b_idx_x == r || b_idx_y == r) return;
+    if (b_idx_x == r || b_idx_y == r) return;  // Skip Phase 1 & 2 blocks
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
@@ -567,30 +597,28 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded, const i
 
     __syncthreads();
 
-    // Keep self in registers
-    int val[2][2];
-    val[0][0] = d_D[self_start + ty * V_padded + tx];
-    val[0][1] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
-    val[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
-    val[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
+    int reg_self[2][2];
+    reg_self[0][0] = d_D[self_start + ty * V_padded + tx];
+    reg_self[0][1] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
+    reg_self[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
+    reg_self[1][1] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
 
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
-        const int r1 = sm_row[ty][k];
-        const int r2 = sm_row[ty + HALF_BLOCK][k];
-        const int c1 = sm_col[k][tx];
-        const int c2 = sm_col[k][tx + HALF_BLOCK];
+        const int r0 = sm_row[ty][k];
+        const int r1 = sm_row[ty + HALF_BLOCK][k];
+        const int c0 = sm_col[k][tx];
+        const int c1 = sm_col[k][tx + HALF_BLOCK];
 
-        val[0][0] = min(val[0][0], r1 + c1);
-        val[0][1] = min(val[0][1], r1 + c2);
-        val[1][0] = min(val[1][0], r2 + c1);
-        val[1][1] = min(val[1][1], r2 + c2);
+        reg_self[0][0] = min(reg_self[0][0], r0 + c0);
+        reg_self[0][1] = min(reg_self[0][1], r0 + c1);
+        reg_self[1][0] = min(reg_self[1][0], r1 + c0);
+        reg_self[1][1] = min(reg_self[1][1], r1 + c1);
     }
 
     // Write back
-    d_D[self_start + ty * V_padded + tx] = val[0][0];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = val[0][1];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = val[1][0];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = val[1][1];
+    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
+    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
+    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
 }
