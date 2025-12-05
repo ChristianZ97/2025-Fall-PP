@@ -1,0 +1,3 @@
+# 251206_053137 '/home/pp25/pp25s057/hw3/hip/experiments/equivalent/rpl_data_251206_053137_927026/input0.xml' generated with '/opt/rocm-6.4.0/libexec/rocprofiler/txt2xml.sh 1'
+<metric range="" kernel="" gpu_index=""></metric>
+<metric name=FETCH_SIZE,WRITE_SIZE,SQ_WAVES,SQ_INSTS_VALU,GRBM_GUI_ACTIVE ></metric>

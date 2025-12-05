@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* Constants */
-#define BLOCKING_FACTOR 32
+#define BLOCKING_FACTOR 16
 #define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 
@@ -205,13 +205,11 @@ void block_FW(
         // 1. Phase 1: Pivot Block (Main Stream)
         // --------------------------------------------
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_start, stream_main);
 #endif
         kernel_phase1<<<1, block_dim, 0, stream_main>>>(d_D, r, V_padded);
         hipEventRecord(event_p1_done, stream_main);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_stop, stream_main);
         hipEventSynchronize(e_p1_stop);
         hipEventElapsedTime(&t_ms, e_p1_start, e_p1_stop);
@@ -225,13 +223,11 @@ void block_FW(
         // --- Row Stream ---
         hipStreamWaitEvent(stream_row, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_start, stream_row);
 #endif
         kernel_phase2_row<<<round, block_dim, 0, stream_row>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_row_done, stream_row);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_stop, stream_row);
         hipEventSynchronize(e_p2_row_stop);
         hipEventElapsedTime(&t_ms, e_p2_row_start, e_p2_row_stop);
@@ -241,13 +237,11 @@ void block_FW(
         // --- Col Stream ---
         hipStreamWaitEvent(stream_col, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_start, stream_col);
 #endif
         kernel_phase2_col<<<round, block_dim, 0, stream_col>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_col_done, stream_col);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_stop, stream_col);
         hipEventSynchronize(e_p2_col_stop);
         hipEventElapsedTime(&t_ms, e_p2_col_start, e_p2_col_stop);
@@ -262,12 +256,10 @@ void block_FW(
 
         dim3 grid_phase3(round, round);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_start, stream_main);
 #endif
         kernel_phase3<<<grid_phase3, block_dim, 0, stream_main>>>(d_D, r, V_padded);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_stop, stream_main);
         hipEventSynchronize(e_p3_stop);
         hipEventElapsedTime(&t_ms, e_p3_start, e_p3_stop);

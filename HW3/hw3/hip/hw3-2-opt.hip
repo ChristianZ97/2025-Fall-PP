@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #define BLOCKING_FACTOR 64
-#define HALF_BLOCK 32
+#define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 
 static int *D;

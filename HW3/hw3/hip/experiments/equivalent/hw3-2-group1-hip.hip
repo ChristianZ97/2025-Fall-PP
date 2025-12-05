@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* Constants */
-#define BLOCKING_FACTOR 32
+#define BLOCKING_FACTOR 64
 #define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 

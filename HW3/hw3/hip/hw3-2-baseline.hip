@@ -1,4 +1,4 @@
-// hw3-2-baseline.hip
+// hw3-2.hip
 
 /* Headers*/
 
@@ -42,7 +42,10 @@ void input(char *infile);
 void output(char *outfile);
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
+    double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 );
 
@@ -50,10 +53,12 @@ void block_FW(
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
-        printf("Usage: %s \n", argv[0]);
-        return 1;
-    }
+    /*
+        if (argc != 3) {
+            printf("Usage: %s \n", argv[0]);
+            return 1;
+        }
+    */
 
 #ifdef PROFILING
     // -------------------------
@@ -138,13 +143,15 @@ int main(int argc, char *argv[]) {
     output(argv[2]);
 #endif
 
-    hipFree(d_D);
-    hipStreamDestroy(stream_main);
-    hipStreamDestroy(stream_row);
-    hipStreamDestroy(stream_col);
-    hipEventDestroy(event_p1_done);
-    hipEventDestroy(event_p2_row_done);
-    hipEventDestroy(event_p2_col_done);
+    /*
+        hipFree(d_D);
+        hipStreamDestroy(stream_main);
+        hipStreamDestroy(stream_row);
+        hipStreamDestroy(stream_col);
+        hipEventDestroy(event_p1_done);
+        hipEventDestroy(event_p2_row_done);
+        hipEventDestroy(event_p2_col_done);
+    */
 
 #ifdef PROFILING
     // ============================================================
@@ -161,8 +168,14 @@ int main(int argc, char *argv[]) {
     double time_io_total_ms = time_io_read_ms + time_io_write_ms;
     double total_time_ms = time_compute_total_ms + time_comm_total_ms + time_io_total_ms;
 
-    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
-            time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
+    fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+            total_time_ms,
+            time_compute_total_ms,
+            time_comm_total_ms,
+            time_io_total_ms,
+            time_phase1_ms,
+            time_phase2_row_ms + time_phase2_col_ms,
+            time_phase3_ms);
 
     hipEventDestroy(event_h2d_start);
     hipEventDestroy(event_h2d_stop);
@@ -176,7 +189,10 @@ int main(int argc, char *argv[]) {
 /* Function Definitions */
 void block_FW(
 #ifdef PROFILING
-    double *time_phase1_ms, double *time_phase2_row_ms, double *time_phase2_col_ms, double *time_phase3_ms
+    double *time_phase1_ms,
+    double *time_phase2_row_ms,
+    double *time_phase2_col_ms,
+    double *time_phase3_ms
 #endif
 ) {
 
@@ -303,7 +319,6 @@ void input(char *infile) {
     // Use Pinned Memory for faster host-device transfer
     // [OPT] Pinned host memory (hipHostAlloc) increases H2D/D2H bandwidth; affects "memory copy" time in profiling.
     hipHostAlloc(&D, V_padded * V_padded * sizeof(int), hipHostAllocDefault);
-    // D = (int *)malloc(V_padded * V_padded * sizeof(int));
 
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
@@ -332,7 +347,6 @@ void output(char *outfile) {
 
     fclose(f);
     hipFreeHost(D);  // Free Pinned Memory
-    free(D);
 }
 
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {

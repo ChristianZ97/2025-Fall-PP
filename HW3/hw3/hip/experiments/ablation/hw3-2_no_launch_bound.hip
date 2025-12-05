@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* Constants */
-#define BLOCKING_FACTOR 32
+#define BLOCKING_FACTOR 64
 #define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 
@@ -22,10 +22,10 @@ hipStream_t stream_main, stream_row, stream_col;
 hipEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
 
 /* Function Prototypes */
-__global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, const int V_padded);
-__global__ void __launch_bounds__(1024) kernel_phase2_row(int *d_D, const int r, const int V_padded);
-__global__ void __launch_bounds__(1024) kernel_phase2_col(int *d_D, const int r, const int V_padded);
-__global__ void __launch_bounds__(1024) kernel_phase3(int *d_D, const int r, const int V_padded);
+__global__ void kernel_phase1(int *d_D, const int r, const int V_padded);
+__global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded);
+__global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded);
+__global__ void kernel_phase3(int *d_D, const int r, const int V_padded);
 
 void input(char *infile);
 void output(char *outfile);
@@ -205,13 +205,11 @@ void block_FW(
         // 1. Phase 1: Pivot Block (Main Stream)
         // --------------------------------------------
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_start, stream_main);
 #endif
         kernel_phase1<<<1, block_dim, 0, stream_main>>>(d_D, r, V_padded);
         hipEventRecord(event_p1_done, stream_main);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_stop, stream_main);
         hipEventSynchronize(e_p1_stop);
         hipEventElapsedTime(&t_ms, e_p1_start, e_p1_stop);
@@ -225,13 +223,11 @@ void block_FW(
         // --- Row Stream ---
         hipStreamWaitEvent(stream_row, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_start, stream_row);
 #endif
         kernel_phase2_row<<<round, block_dim, 0, stream_row>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_row_done, stream_row);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_stop, stream_row);
         hipEventSynchronize(e_p2_row_stop);
         hipEventElapsedTime(&t_ms, e_p2_row_start, e_p2_row_stop);
@@ -241,13 +237,11 @@ void block_FW(
         // --- Col Stream ---
         hipStreamWaitEvent(stream_col, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_start, stream_col);
 #endif
         kernel_phase2_col<<<round, block_dim, 0, stream_col>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_col_done, stream_col);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_stop, stream_col);
         hipEventSynchronize(e_p2_col_stop);
         hipEventElapsedTime(&t_ms, e_p2_col_start, e_p2_col_stop);
@@ -262,12 +256,10 @@ void block_FW(
 
         dim3 grid_phase3(round, round);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_start, stream_main);
 #endif
         kernel_phase3<<<grid_phase3, block_dim, 0, stream_main>>>(d_D, r, V_padded);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_stop, stream_main);
         hipEventSynchronize(e_p3_stop);
         hipEventElapsedTime(&t_ms, e_p3_start, e_p3_stop);
@@ -365,7 +357,7 @@ __device__ __forceinline__ void store_block_int4(int *__restrict__ dst, const in
     }
 }
 
-__global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, const int V_padded) {
+__global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
     __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
@@ -390,7 +382,7 @@ __global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, con
     store_block_int4(d_D + b_start, V_padded, sm_pivot);
 }
 
-__global__ void __launch_bounds__(1024) kernel_phase2_row(int *d_D, const int r, const int V_padded) {
+__global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     const int b_idx_x = blockIdx.x;
     if (b_idx_x == r) return;
 
@@ -436,7 +428,7 @@ __global__ void __launch_bounds__(1024) kernel_phase2_row(int *d_D, const int r,
     store_block_int4(d_D + self_start, V_padded, sm_self);
 }
 
-__global__ void __launch_bounds__(1024) kernel_phase2_col(int *d_D, const int r, const int V_padded) {
+__global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
     const int b_idx_y = blockIdx.x;
     if (b_idx_y == r) return;
 
@@ -482,7 +474,7 @@ __global__ void __launch_bounds__(1024) kernel_phase2_col(int *d_D, const int r,
     store_block_int4(d_D + self_start, V_padded, sm_self);
 }
 
-__global__ void __launch_bounds__(1024) kernel_phase3(int *d_D, const int r, const int V_padded) {
+__global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
     const int b_idx_x = blockIdx.x;
     const int b_idx_y = blockIdx.y;
     if (b_idx_x == r || b_idx_y == r) return;

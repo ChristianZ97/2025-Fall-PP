@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* Constants */
-#define BLOCKING_FACTOR 32
+#define BLOCKING_FACTOR 64
 #define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 
@@ -134,6 +134,8 @@ int main(int argc, char *argv[]) {
 
     // Cleanup
     hipFree(d_D);
+    hipHostFree(D);  // Changed from hipFreeHost to match standard HIP API (or hipHostFree)
+
     hipStreamDestroy(stream_main);
     hipStreamDestroy(stream_row);
     hipStreamDestroy(stream_col);
@@ -205,13 +207,11 @@ void block_FW(
         // 1. Phase 1: Pivot Block (Main Stream)
         // --------------------------------------------
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_start, stream_main);
 #endif
         kernel_phase1<<<1, block_dim, 0, stream_main>>>(d_D, r, V_padded);
         hipEventRecord(event_p1_done, stream_main);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p1_stop, stream_main);
         hipEventSynchronize(e_p1_stop);
         hipEventElapsedTime(&t_ms, e_p1_start, e_p1_stop);
@@ -225,13 +225,11 @@ void block_FW(
         // --- Row Stream ---
         hipStreamWaitEvent(stream_row, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_start, stream_row);
 #endif
         kernel_phase2_row<<<round, block_dim, 0, stream_row>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_row_done, stream_row);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
         hipEventRecord(e_p2_row_stop, stream_row);
         hipEventSynchronize(e_p2_row_stop);
         hipEventElapsedTime(&t_ms, e_p2_row_start, e_p2_row_stop);
@@ -241,13 +239,11 @@ void block_FW(
         // --- Col Stream ---
         hipStreamWaitEvent(stream_col, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_start, stream_col);
 #endif
         kernel_phase2_col<<<round, block_dim, 0, stream_col>>>(d_D, r, V_padded);
         hipEventRecord(event_p2_col_done, stream_col);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
         hipEventRecord(e_p2_col_stop, stream_col);
         hipEventSynchronize(e_p2_col_stop);
         hipEventElapsedTime(&t_ms, e_p2_col_start, e_p2_col_stop);
@@ -262,12 +258,10 @@ void block_FW(
 
         dim3 grid_phase3(round, round);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_start, stream_main);
 #endif
         kernel_phase3<<<grid_phase3, block_dim, 0, stream_main>>>(d_D, r, V_padded);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
         hipEventRecord(e_p3_stop, stream_main);
         hipEventSynchronize(e_p3_stop);
         hipEventElapsedTime(&t_ms, e_p3_start, e_p3_stop);
@@ -294,18 +288,22 @@ void block_FW(
 
 void input(char *infile) {
     FILE *file = fopen(infile, "rb");
+    if (!file) {
+        perror("fopen");
+        exit(1);
+    }
     fread(&V, sizeof(int), 1, file);
     fread(&E, sizeof(int), 1, file);
 
     V_padded = (V + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR * BLOCKING_FACTOR;
 
-    hipHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostAllocDefault);
+    hipHostMalloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostMallocDefault);
 
-// #pragma unroll
-
-    for (int i = 0; i < V_padded; ++i)
-        for (int j = 0; j < V_padded; ++j)
+    for (int i = 0; i < V_padded; ++i) {
+        for (int j = 0; j < V_padded; ++j) {
             D[i * V_padded + j] = (i == j) ? 0 : INF;
+        }
+    }
 
     int pair[3];
     for (int i = 0; i < E; ++i) {
@@ -317,11 +315,13 @@ void input(char *infile) {
 
 void output(char *outfile) {
     FILE *f = fopen(outfile, "w");
+    if (!f) {
+        perror("fopen output");
+        exit(1);
+    }
     for (int i = 0; i < V; ++i)
         fwrite(&D[i * V_padded], sizeof(int), V, f);
     fclose(f);
-
-    hipFreeHost(D);
 }
 
 // ---------------------------------------------------------------------------

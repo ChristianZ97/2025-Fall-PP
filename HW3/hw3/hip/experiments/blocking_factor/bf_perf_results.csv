@@ -1,0 +1,5 @@
+Version,BF,Testcase,V,TotalTime_ms,ComputeTime_ms,GOPS,rocprof_KernelDuration_ns,gld_GBs_NA,gst_GBs_NA,shld_GBs_NA,shst_GBs_NA
+hw3-2_bf8,8,p23k1,22973,4867.118,103.183,235003.8530,0,0,0,0,0
+hw3-2_bf16,16,p23k1,22973,7277.152,48.483,500142.3708,0,0,0,0,0
+hw3-2_bf32,32,p23k1,22973,5163.787,24.267,999233.6326,0,0,0,0,0
+hw3-2_bf64,64,p23k1,22973,5242.230,11.892,2039051.6787,0,0,0,0,0

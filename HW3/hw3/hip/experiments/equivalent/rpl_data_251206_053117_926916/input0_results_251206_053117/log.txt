@@ -1,0 +1,9 @@
+[PROF_RESULT],1782.638,686.997,12.734,1082.907,212.659,291.304,183.034
+ROCProfiler: input from "/home/pp25/pp25s057/hw3/hip/experiments/equivalent/rpl_data_251206_053117_926916/input0.xml"
+  gpu_index = 
+  kernel = 
+  range = 
+  5 metrics
+    FETCH_SIZE, WRITE_SIZE, SQ_WAVES, SQ_INSTS_VALU, GRBM_GUI_ACTIVE
+
+ROCPRofiler: 628 contexts collected, output directory /home/pp25/pp25s057/hw3/hip/experiments/equivalent/rpl_data_251206_053117_926916/input0_results_251206_053117

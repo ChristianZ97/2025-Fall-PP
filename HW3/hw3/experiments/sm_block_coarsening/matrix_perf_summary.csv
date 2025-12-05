@@ -1,0 +1,11 @@
+Version,MemoryType,BlockFactor,Coarsening,Workload,GrandTotalTime_ms,TotalComputeTime_ms
+hw3-2_global_bf32_coarsen_1024,Global,32,Yes,1024,620392.137,599434.917
+hw3-2_global_bf32_coarsen_256,Global,32,Yes,256,374844.311,366850.633
+hw3-2_global_bf32_noncoarsen_1024,Global,32,No,1024,804967.876,768090.458
+hw3-2_global_bf32_noncoarsen_256,Global,32,No,256,743214.999,714399.131
+hw3-2_global_bf64_coarsen_4096,Global,64,Yes,4096,833570.798,796181.046
+hw3-2_sm_bf16_coarsen_256,SharedMem,16,Yes,256,856474.125,795705.930
+hw3-2_sm_bf16_noncoarsen_256,SharedMem,16,No,256,1087273.105,988492.726
+hw3-2_sm_bf32_coarsen_1024,SharedMem,32,Yes,1024,1229917.589,1049170.481
+hw3-2_sm_bf32_noncoarsen_1024,SharedMem,32,No,1024,1350465.200,1178313.873
+hw3-2_sm_bf64_coarsen_4096,SharedMem,64,Yes,4096,812867.505,622438.347

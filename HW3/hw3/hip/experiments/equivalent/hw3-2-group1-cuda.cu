@@ -1,13 +1,13 @@
-// hw3-2_prof.hip
+// hw3-2_prof.cuda
 
 /* Headers */
-#include <hip/hip_runtime.h>
+#include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 /* Constants */
-#define BLOCKING_FACTOR 32
+#define BLOCKING_FACTOR 64
 #define HALF_BLOCK BLOCKING_FACTOR / 2
 #define INF ((1 << 30) - 1)
 
@@ -18,8 +18,8 @@ static int V, E;
 static int V_padded;
 
 /* Streams and Events */
-hipStream_t stream_main, stream_row, stream_col;
-hipEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
+cudaStream_t stream_main, stream_row, stream_col;
+cudaEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
 
 /* Function Prototypes */
 __global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, const int V_padded);
@@ -48,12 +48,12 @@ int main(int argc, char *argv[]) {
     // -------------------------
     // Host-side Events & Timers
     // -------------------------
-    hipEvent_t event_h2d_start, event_h2d_stop;
-    hipEvent_t event_d2h_start, event_d2h_stop;
-    hipEventCreate(&event_h2d_start);
-    hipEventCreate(&event_h2d_stop);
-    hipEventCreate(&event_d2h_start);
-    hipEventCreate(&event_d2h_stop);
+    cudaEvent_t event_h2d_start, event_h2d_stop;
+    cudaEvent_t event_d2h_start, event_d2h_stop;
+    cudaEventCreate(&event_h2d_start);
+    cudaEventCreate(&event_h2d_stop);
+    cudaEventCreate(&event_d2h_start);
+    cudaEventCreate(&event_d2h_stop);
 
     double time_phase1_ms = 0.0;
     double time_phase2_row_ms = 0.0;
@@ -73,29 +73,29 @@ int main(int argc, char *argv[]) {
     time_io_read_ms = 1000.0 * (io_read_end - io_read_start) / CLOCKS_PER_SEC;
 #endif
 
-    hipStreamCreate(&stream_main);
-    hipStreamCreate(&stream_row);
-    hipStreamCreate(&stream_col);
+    cudaStreamCreate(&stream_main);
+    cudaStreamCreate(&stream_row);
+    cudaStreamCreate(&stream_col);
 
-    hipEventCreate(&event_p1_done);
-    hipEventCreate(&event_p2_row_done);
-    hipEventCreate(&event_p2_col_done);
+    cudaEventCreate(&event_p1_done);
+    cudaEventCreate(&event_p2_row_done);
+    cudaEventCreate(&event_p2_col_done);
 
     size_t size = (size_t)V_padded * V_padded * sizeof(int);
-    hipMalloc(&d_D, size);
+    cudaMalloc(&d_D, size);
 
     // -------------------------
     // H2D Transfer
     // -------------------------
 #ifdef PROFILING
-    hipEventRecord(event_h2d_start, 0);
+    cudaEventRecord(event_h2d_start, 0);
 #endif
 
-    hipMemcpy(d_D, D, size, hipMemcpyHostToDevice);
+    cudaMemcpy(d_D, D, size, cudaMemcpyHostToDevice);
 
 #ifdef PROFILING
-    hipEventRecord(event_h2d_stop, 0);
-    hipEventSynchronize(event_h2d_stop);
+    cudaEventRecord(event_h2d_stop, 0);
+    cudaEventSynchronize(event_h2d_stop);
 #endif
 
     // -------------------------
@@ -111,14 +111,14 @@ int main(int argc, char *argv[]) {
     // D2H Transfer
     // -------------------------
 #ifdef PROFILING
-    hipEventRecord(event_d2h_start, 0);
+    cudaEventRecord(event_d2h_start, 0);
 #endif
 
-    hipMemcpy(D, d_D, size, hipMemcpyDeviceToHost);
+    cudaMemcpy(D, d_D, size, cudaMemcpyDeviceToHost);
 
 #ifdef PROFILING
-    hipEventRecord(event_d2h_stop, 0);
-    hipEventSynchronize(event_d2h_stop);
+    cudaEventRecord(event_d2h_stop, 0);
+    cudaEventSynchronize(event_d2h_stop);
 #endif
 
 #ifdef PROFILING
@@ -133,22 +133,22 @@ int main(int argc, char *argv[]) {
 #endif
 
     // Cleanup
-    hipFree(d_D);
-    hipStreamDestroy(stream_main);
-    hipStreamDestroy(stream_row);
-    hipStreamDestroy(stream_col);
+    cudaFree(d_D);
+    cudaStreamDestroy(stream_main);
+    cudaStreamDestroy(stream_row);
+    cudaStreamDestroy(stream_col);
 
-    hipEventDestroy(event_p1_done);
-    hipEventDestroy(event_p2_row_done);
-    hipEventDestroy(event_p2_col_done);
+    cudaEventDestroy(event_p1_done);
+    cudaEventDestroy(event_p2_row_done);
+    cudaEventDestroy(event_p2_col_done);
 
 #ifdef PROFILING
     // -------------------------
     // Profiling Result Output
     // -------------------------
     float t_h2d_f = 0.0f, t_d2h_f = 0.0f;
-    hipEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
-    hipEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
+    cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
+    cudaEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
 
     double time_h2d_ms = (double)t_h2d_f;
     double time_d2h_ms = (double)t_d2h_f;
@@ -160,10 +160,10 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", total_time_ms, time_compute_total_ms, time_comm_total_ms, time_io_total_ms, time_phase1_ms,
             time_phase2_row_ms + time_phase2_col_ms, time_phase3_ms);
 
-    hipEventDestroy(event_h2d_start);
-    hipEventDestroy(event_h2d_stop);
-    hipEventDestroy(event_d2h_start);
-    hipEventDestroy(event_d2h_stop);
+    cudaEventDestroy(event_h2d_start);
+    cudaEventDestroy(event_h2d_stop);
+    cudaEventDestroy(event_d2h_start);
+    cudaEventDestroy(event_d2h_stop);
 #endif
 
     return 0;
@@ -179,19 +179,19 @@ void block_FW(
 
 #ifdef PROFILING
     // Local accumulators and events
-    hipEvent_t e_p1_start, e_p1_stop;
-    hipEvent_t e_p2_row_start, e_p2_row_stop;
-    hipEvent_t e_p2_col_start, e_p2_col_stop;
-    hipEvent_t e_p3_start, e_p3_stop;
+    cudaEvent_t e_p1_start, e_p1_stop;
+    cudaEvent_t e_p2_row_start, e_p2_row_stop;
+    cudaEvent_t e_p2_col_start, e_p2_col_stop;
+    cudaEvent_t e_p3_start, e_p3_stop;
 
-    hipEventCreate(&e_p1_start);
-    hipEventCreate(&e_p1_stop);
-    hipEventCreate(&e_p2_row_start);
-    hipEventCreate(&e_p2_row_stop);
-    hipEventCreate(&e_p2_col_start);
-    hipEventCreate(&e_p2_col_stop);
-    hipEventCreate(&e_p3_start);
-    hipEventCreate(&e_p3_stop);
+    cudaEventCreate(&e_p1_start);
+    cudaEventCreate(&e_p1_stop);
+    cudaEventCreate(&e_p2_row_start);
+    cudaEventCreate(&e_p2_row_stop);
+    cudaEventCreate(&e_p2_col_start);
+    cudaEventCreate(&e_p2_col_stop);
+    cudaEventCreate(&e_p3_start);
+    cudaEventCreate(&e_p3_stop);
 
     double acc_p1 = 0.0;
     double acc_p2_row = 0.0;
@@ -205,16 +205,16 @@ void block_FW(
         // 1. Phase 1: Pivot Block (Main Stream)
         // --------------------------------------------
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
-        hipEventRecord(e_p1_start, stream_main);
+        cudaStreamSynchronize(stream_main);
+        cudaEventRecord(e_p1_start, stream_main);
 #endif
         kernel_phase1<<<1, block_dim, 0, stream_main>>>(d_D, r, V_padded);
-        hipEventRecord(event_p1_done, stream_main);
+        cudaEventRecord(event_p1_done, stream_main);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
-        hipEventRecord(e_p1_stop, stream_main);
-        hipEventSynchronize(e_p1_stop);
-        hipEventElapsedTime(&t_ms, e_p1_start, e_p1_stop);
+        cudaStreamSynchronize(stream_main);
+        cudaEventRecord(e_p1_stop, stream_main);
+        cudaEventSynchronize(e_p1_stop);
+        cudaEventElapsedTime(&t_ms, e_p1_start, e_p1_stop);
         acc_p1 += t_ms;
 #endif
 
@@ -223,54 +223,54 @@ void block_FW(
         // --------------------------------------------
 
         // --- Row Stream ---
-        hipStreamWaitEvent(stream_row, event_p1_done, 0);
+        cudaStreamWaitEvent(stream_row, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
-        hipEventRecord(e_p2_row_start, stream_row);
+        cudaStreamSynchronize(stream_row);
+        cudaEventRecord(e_p2_row_start, stream_row);
 #endif
         kernel_phase2_row<<<round, block_dim, 0, stream_row>>>(d_D, r, V_padded);
-        hipEventRecord(event_p2_row_done, stream_row);
+        cudaEventRecord(event_p2_row_done, stream_row);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_row);
-        hipEventRecord(e_p2_row_stop, stream_row);
-        hipEventSynchronize(e_p2_row_stop);
-        hipEventElapsedTime(&t_ms, e_p2_row_start, e_p2_row_stop);
+        cudaStreamSynchronize(stream_row);
+        cudaEventRecord(e_p2_row_stop, stream_row);
+        cudaEventSynchronize(e_p2_row_stop);
+        cudaEventElapsedTime(&t_ms, e_p2_row_start, e_p2_row_stop);
         acc_p2_row += t_ms;
 #endif
 
         // --- Col Stream ---
-        hipStreamWaitEvent(stream_col, event_p1_done, 0);
+        cudaStreamWaitEvent(stream_col, event_p1_done, 0);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
-        hipEventRecord(e_p2_col_start, stream_col);
+        cudaStreamSynchronize(stream_col);
+        cudaEventRecord(e_p2_col_start, stream_col);
 #endif
         kernel_phase2_col<<<round, block_dim, 0, stream_col>>>(d_D, r, V_padded);
-        hipEventRecord(event_p2_col_done, stream_col);
+        cudaEventRecord(event_p2_col_done, stream_col);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_col);
-        hipEventRecord(e_p2_col_stop, stream_col);
-        hipEventSynchronize(e_p2_col_stop);
-        hipEventElapsedTime(&t_ms, e_p2_col_start, e_p2_col_stop);
+        cudaStreamSynchronize(stream_col);
+        cudaEventRecord(e_p2_col_stop, stream_col);
+        cudaEventSynchronize(e_p2_col_stop);
+        cudaEventElapsedTime(&t_ms, e_p2_col_start, e_p2_col_stop);
         acc_p2_col += t_ms;
 #endif
 
         // --------------------------------------------
         // 3. Phase 3: Remaining Blocks (Main Stream)
         // --------------------------------------------
-        hipStreamWaitEvent(stream_main, event_p2_row_done, 0);
-        hipStreamWaitEvent(stream_main, event_p2_col_done, 0);
+        cudaStreamWaitEvent(stream_main, event_p2_row_done, 0);
+        cudaStreamWaitEvent(stream_main, event_p2_col_done, 0);
 
         dim3 grid_phase3(round, round);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
-        hipEventRecord(e_p3_start, stream_main);
+        cudaStreamSynchronize(stream_main);
+        cudaEventRecord(e_p3_start, stream_main);
 #endif
         kernel_phase3<<<grid_phase3, block_dim, 0, stream_main>>>(d_D, r, V_padded);
 #ifdef PROFILING
-        hipStreamSynchronize(stream_main);
-        hipEventRecord(e_p3_stop, stream_main);
-        hipEventSynchronize(e_p3_stop);
-        hipEventElapsedTime(&t_ms, e_p3_start, e_p3_stop);
+        cudaStreamSynchronize(stream_main);
+        cudaEventRecord(e_p3_stop, stream_main);
+        cudaEventSynchronize(e_p3_stop);
+        cudaEventElapsedTime(&t_ms, e_p3_start, e_p3_stop);
         acc_p3 += t_ms;
 #endif
     }
@@ -281,14 +281,14 @@ void block_FW(
     *time_phase2_col_ms = acc_p2_col;
     *time_phase3_ms = acc_p3;
 
-    hipEventDestroy(e_p1_start);
-    hipEventDestroy(e_p1_stop);
-    hipEventDestroy(e_p2_row_start);
-    hipEventDestroy(e_p2_row_stop);
-    hipEventDestroy(e_p2_col_start);
-    hipEventDestroy(e_p2_col_stop);
-    hipEventDestroy(e_p3_start);
-    hipEventDestroy(e_p3_stop);
+    cudaEventDestroy(e_p1_start);
+    cudaEventDestroy(e_p1_stop);
+    cudaEventDestroy(e_p2_row_start);
+    cudaEventDestroy(e_p2_row_stop);
+    cudaEventDestroy(e_p2_col_start);
+    cudaEventDestroy(e_p2_col_stop);
+    cudaEventDestroy(e_p3_start);
+    cudaEventDestroy(e_p3_stop);
 #endif
 }
 
@@ -299,7 +299,7 @@ void input(char *infile) {
 
     V_padded = (V + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR * BLOCKING_FACTOR;
 
-    hipHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostAllocDefault);
+    cudaHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), cudaHostAllocDefault);
 
 // #pragma unroll
 
@@ -321,7 +321,7 @@ void output(char *outfile) {
         fwrite(&D[i * V_padded], sizeof(int), V, f);
     fclose(f);
 
-    hipFreeHost(D);
+    cudaFreeHost(D);
 }
 
 // ---------------------------------------------------------------------------

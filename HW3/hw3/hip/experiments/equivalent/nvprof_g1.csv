@@ -1,0 +1,26 @@
+==2536853== NVPROF is profiling process 2536853, command: ./hw3-2-group1-cuda ../../../testcases/c21.1 /dev/null
+==2536853== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+==2536853== Profiling application: ./hw3-2-group1-cuda ../../../testcases/c21.1 /dev/null
+==2536853== Profiling result:
+==2536853== Metric result:
+"Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",157,"gld_throughput","Global Load Throughput",106.171770GB/s,136.991891GB/s,116.168071GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",157,"gst_throughput","Global Store Throughput",53.085885GB/s,68.495945GB/s,58.084036GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",157,"shared_load_throughput","Shared Memory Load Throughput",1858.005983GB/s,2397.358088GB/s,2032.941249GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",157,"shared_store_throughput","Shared Memory Store Throughput",212.343541GB/s,273.983782GB/s,232.336143GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_row(int*, int, int)",157,"achieved_occupancy","Achieved Occupancy",0.722796,0.863797,0.814392
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",157,"gld_throughput","Global Load Throughput",99.981985GB/s,119.018555GB/s,110.545816GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",157,"gst_throughput","Global Store Throughput",49.990992GB/s,59.509277GB/s,55.272908GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",157,"shared_load_throughput","Shared Memory Load Throughput",1749.684734GB/s,2082.824707GB/s,1934.551786GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",157,"shared_store_throughput","Shared Memory Store Throughput",199.963970GB/s,238.037109GB/s,221.091633GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase2_col(int*, int, int)",157,"achieved_occupancy","Achieved Occupancy",0.693763,0.889685,0.817641
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",157,"gld_throughput","Global Load Throughput",448.787913MB/s,566.451566MB/s,539.730891MB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",157,"gst_throughput","Global Store Throughput",448.787913MB/s,566.451566MB/s,539.730891MB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",157,"shared_load_throughput","Shared Memory Load Throughput",42.512136GB/s,53.658010GB/s,51.126864GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",157,"shared_store_throughput","Shared Memory Store Throughput",28.487514GB/s,35.956398GB/s,34.260270GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase1(int*, int, int)",157,"achieved_occupancy","Achieved Occupancy",0.124491,0.124678,0.124603
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",157,"gld_throughput","Global Load Throughput",288.667098GB/s,295.277858GB/s,293.156280GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",157,"gst_throughput","Global Store Throughput",96.222366GB/s,98.425953GB/s,97.718760GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",157,"shared_load_throughput","Shared Memory Load Throughput",3079.115710GB/s,3149.630483GB/s,3127.000321GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",157,"shared_store_throughput","Shared Memory Store Throughput",192.444732GB/s,196.851905GB/s,195.437520GB/s
+"NVIDIA GeForce GTX 1080 (0)","kernel_phase3(int*, int, int)",157,"achieved_occupancy","Achieved Occupancy",0.938544,0.942310,0.939985
