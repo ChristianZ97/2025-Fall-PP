@@ -400,7 +400,7 @@ void input(char *infile) {
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
 
-// #pragma unroll
+#pragma unroll
 
     for (int i = 0; i < V_padded; ++i)
         for (int j = 0; j < V_padded; ++j)
@@ -448,7 +448,7 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
 
     // 2. Floyd-Warshall Computation within the block
 
-// #pragma unroll
+#pragma unroll
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         // const int pivot_row_val1 = sm[ty][k];
@@ -501,7 +501,7 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     // sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-// #pragma unroll
+#pragma unroll
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         // int pivot_val1, pivot_val2, self_val1, self_val2;
@@ -518,7 +518,7 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
         // sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], pivot_val2 + self_val1);
         d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = min(d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)], d_D[pivot_start + (ty + HALF_BLOCK) * V_padded + k] + d_D[self_start + k * V_padded + (tx + HALF_BLOCK)]);
         // sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], pivot_val2 + self_val2);
-        __syncthreads();
+        // __syncthreads();
     }
 
     // d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
@@ -554,7 +554,7 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
     // sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-// #pragma unroll
+#pragma unroll
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         // int pivot_val1, pivot_val2, self_val1, self_val2;
@@ -571,7 +571,7 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded) {
         // sm_self[ty + HALF_BLOCK][tx] = min(sm_self[ty + HALF_BLOCK][tx], self_val2 + pivot_val1);
         d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = min(d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)], d_D[self_start + (ty + HALF_BLOCK) * V_padded + k] + d_D[pivot_start + k * V_padded + (tx + HALF_BLOCK)]);
         // sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = min(sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK], self_val2 + pivot_val2);
-        __syncthreads();
+        // __syncthreads();
     }
 
     // d_D[self_start + ty * V_padded + tx] = sm_self[ty][tx];
@@ -614,7 +614,7 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded) {
     // sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
     __syncthreads();
 
-// #pragma unroll
+#pragma unroll
 
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
 

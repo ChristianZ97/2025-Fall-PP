@@ -1,4 +1,4 @@
-// hw3-2.hip
+// hw3-2-opt.hip
 #include <hip/hip_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,7 +101,7 @@ void input(char *infile) {
 
     hipHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostAllocDefault);
 
-// #pragma unroll
+    // #pragma unroll
 
     for (int i = 0; i < V_padded; ++i)
         for (int j = 0; j < V_padded; ++j)

@@ -1,8 +1,8 @@
-// hw3-2.hip
+// hw3-2.cu
 
 /* Headers*/
 
-#include <hip/hip_runtime.h>
+#include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -28,8 +28,8 @@ static int V, E;      // Original vertices, edges
 static int V_padded;  // Padded vertices (multiple of 64)
 
 // [OPT] Multiple streams & events are used to overlap different phases (streaming / reduce idle time).
-hipStream_t stream_main, stream_row, stream_col;
-hipEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
+cudaStream_t stream_main, stream_row, stream_col;
+cudaEvent_t event_p1_done, event_p2_row_done, event_p2_col_done;
 
 /* Function Prototypes */
 
@@ -55,20 +55,20 @@ int main(int argc, char *argv[]) {
 
     input(argv[1]);
 
-    hipStreamCreate(&stream_main);
-    hipStreamCreate(&stream_row);
-    hipStreamCreate(&stream_col);
-    hipEventCreate(&event_p1_done);
-    hipEventCreate(&event_p2_row_done);
-    hipEventCreate(&event_p2_col_done);
+    cudaStreamCreate(&stream_main);
+    cudaStreamCreate(&stream_row);
+    cudaStreamCreate(&stream_col);
+    cudaEventCreate(&event_p1_done);
+    cudaEventCreate(&event_p2_row_done);
+    cudaEventCreate(&event_p2_col_done);
 
     size_t size = V_padded * V_padded * sizeof(int);
-    hipMalloc(&d_D, size);
+    cudaMalloc(&d_D, size);
 
     // -------------------------
     // H2D transfer
     // -------------------------
-    hipMemcpy(d_D, D, size, hipMemcpyHostToDevice);
+    cudaMemcpy(d_D, D, size, cudaMemcpyHostToDevice);
 
     // -------------------------
     // Kernel execution
@@ -78,18 +78,18 @@ int main(int argc, char *argv[]) {
     // -------------------------
     // D2H transfer
     // -------------------------
-    hipMemcpy(D, d_D, size, hipMemcpyDeviceToHost);
+    cudaMemcpy(D, d_D, size, cudaMemcpyDeviceToHost);
 
     output(argv[2]);
 
     /*
-        hipFree(d_D);
-        hipStreamDestroy(stream_main);
-        hipStreamDestroy(stream_row);
-        hipStreamDestroy(stream_col);
-        hipEventDestroy(event_p1_done);
-        hipEventDestroy(event_p2_row_done);
-        hipEventDestroy(event_p2_col_done);
+        cudaFree(d_D);
+        cudaStreamDestroy(stream_main);
+        cudaStreamDestroy(stream_row);
+        cudaStreamDestroy(stream_col);
+        cudaEventDestroy(event_p1_done);
+        cudaEventDestroy(event_p2_row_done);
+        cudaEventDestroy(event_p2_col_done);
     */
 
     return 0;
@@ -106,20 +106,20 @@ void block_FW() {
     for (int r = 0; r < round; ++r) {
         // 1. Phase 1: Pivot Block
         kernel_phase1<<<1, threads_per_block, 0, stream_main>>>(d_D, r, V_padded);
-        hipEventRecord(event_p1_done, stream_main);
+        cudaEventRecord(event_p1_done, stream_main);
 
         // 2. Phase 2: Pivot Row (row stream)
-        hipStreamWaitEvent(stream_row, event_p1_done, 0);
+        cudaStreamWaitEvent(stream_row, event_p1_done, 0);
         kernel_phase2_row<<<round, threads_per_block, 0, stream_row>>>(d_D, r, V_padded);
-        hipEventRecord(event_p2_row_done, stream_row);
+        cudaEventRecord(event_p2_row_done, stream_row);
 
         // 2. Phase 2: Pivot Col (col stream)
-        hipStreamWaitEvent(stream_col, event_p1_done, 0);
+        cudaStreamWaitEvent(stream_col, event_p1_done, 0);
         kernel_phase2_col<<<round, threads_per_block, 0, stream_col>>>(d_D, r, V_padded);
-        hipEventRecord(event_p2_col_done, stream_col);
+        cudaEventRecord(event_p2_col_done, stream_col);
 
-        hipStreamWaitEvent(stream_main, event_p2_row_done, 0);
-        hipStreamWaitEvent(stream_main, event_p2_col_done, 0);
+        cudaStreamWaitEvent(stream_main, event_p2_row_done, 0);
+        cudaStreamWaitEvent(stream_main, event_p2_col_done, 0);
 
         // 3. Phase 3: Independent Blocks
         // (round, round) blocks per grid
@@ -137,8 +137,8 @@ void input(char *infile) {
     V_padded = (V + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR * BLOCKING_FACTOR;
 
     // Use Pinned Memory for faster host-device transfer
-    // [OPT] Pinned host memory (hipHostAlloc) increases H2D/D2H bandwidth; affects "memory copy" time in profiling.
-    hipHostAlloc(&D, V_padded * V_padded * sizeof(int), hipHostAllocDefault);
+    // [OPT] Pinned host memory (cudaHostAlloc) increases H2D/D2H bandwidth; affects "memory copy" time in profiling.
+    cudaHostAlloc(&D, V_padded * V_padded * sizeof(int), cudaHostAllocDefault);
 
     // Initialize with INF (and 0 diagonal)
     // Note: Padding areas are also initialized to avoid side effects
@@ -166,7 +166,7 @@ void output(char *outfile) {
         fwrite(&D[i * V_padded], sizeof(int), V, f);
 
     fclose(f);
-    hipFreeHost(D);  // Free Pinned Memory
+    cudaFreeHost(D);  // Free Pinned Memory
 }
 
 __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {

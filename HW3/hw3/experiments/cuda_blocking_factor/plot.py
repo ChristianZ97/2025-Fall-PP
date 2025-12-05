@@ -40,12 +40,12 @@ ax1.spines['left'].set_linewidth(2)
 
 # ★★★ 設定左軸 Range：拉高上限，讓 Bar 變矮，留出上方空間給折線 ★★★
 gops_max = df['GOPS'].max()
-ax1.set_ylim(0, gops_max * 1.15) # 設為最大值的 1.6 倍
+ax1.set_ylim(0, gops_max * 1.7) # 設為最大值的 1.6 倍
 
 # 標註 GOPS 數值
 for bar in bars:
     height = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+    ax1.text(bar.get_x() + bar.get_width()/2., height + 1,
              f'{height:.2f}', ha='center', va='bottom', color=color_gops, fontweight='bold', fontsize=12)
 
 # --- 右軸：Bandwidth (折線圖) ---
@@ -63,8 +63,8 @@ ax2.spines['right'].set_linewidth(2)
 ax2.spines['left'].set_visible(False)
 
 # ★★★ 設定右軸 Range：如果需要也可以微調，通常 0 開始即可 ★★★
-# bandwidth_max = df['shld_GBs'].max()
-# ax2.set_ylim(0, bandwidth_max * 1.1)
+bandwidth_max = df['shld_GBs'].max()
+ax2.set_ylim(0, bandwidth_max * 1.1)
 
 # 合併 Legend
 lines = [bars, l1, l2, l3, l4]

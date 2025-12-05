@@ -1,15 +1,12 @@
-// hw3-3.cu
+// hw3-3.hip
 
 /* Headers */
-
 #include <hip/hip_runtime.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 /* Constants & Global Variables */
-
 #define BLOCKING_FACTOR 64
 #define HALF_BLOCK 32
 #define INF ((1 << 30) - 1)
@@ -22,28 +19,61 @@ static int V_padded;  // Padded vertices (multiple of 64)
 hipStream_t stream_main[2], stream_row[2], stream_col[2];
 hipEvent_t event_p1_done[2], event_p2_row_done[2], event_p2_col_done[2];
 
-/* Function Prototypes */
+/* Helper Functions for int4 Optimization (From hw3-2) */
+__device__ __forceinline__ void load_block_int4(const int *__restrict__ src, const int stride, int dst[BLOCKING_FACTOR][BLOCKING_FACTOR + 1]) {
+    const int tid = threadIdx.y * HALF_BLOCK + threadIdx.x;
+    const int iterations = (BLOCKING_FACTOR * BLOCKING_FACTOR) / (HALF_BLOCK * HALF_BLOCK * 4);
 
-__global__ void kernel_phase1(int *d_D, const int r, const int V_padded);
-__global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded);
-__global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, const int row_offset, const int row_limit);
-__global__ void kernel_phase3(int *d_D, const int r, const int V_padded, const int row_offset);
+#pragma unroll
+    for (int i = 0; i < iterations; ++i) {
+        const int offset = tid + i * (HALF_BLOCK * HALF_BLOCK);
+        const int r = offset / (BLOCKING_FACTOR / 4);
+        const int c = (offset % (BLOCKING_FACTOR / 4)) * 4;
+
+        int4 tmp = *((int4 *)(src + r * stride + c));
+        dst[r][c] = tmp.x;
+        dst[r][c + 1] = tmp.y;
+        dst[r][c + 2] = tmp.z;
+        dst[r][c + 3] = tmp.w;
+    }
+}
+
+__device__ __forceinline__ void store_block_int4(int *__restrict__ dst, const int stride, int src[BLOCKING_FACTOR][BLOCKING_FACTOR + 1]) {
+    const int tid = threadIdx.y * HALF_BLOCK + threadIdx.x;
+    const int iterations = (BLOCKING_FACTOR * BLOCKING_FACTOR) / (HALF_BLOCK * HALF_BLOCK * 4);
+
+#pragma unroll
+    for (int i = 0; i < iterations; ++i) {
+        const int offset = tid + i * (HALF_BLOCK * HALF_BLOCK);
+        const int r = offset / (BLOCKING_FACTOR / 4);
+        const int c = (offset % (BLOCKING_FACTOR / 4)) * 4;
+
+        int4 tmp;
+        tmp.x = src[r][c];
+        tmp.y = src[r][c + 1];
+        tmp.z = src[r][c + 2];
+        tmp.w = src[r][c + 3];
+
+        *((int4 *)(dst + r * stride + c)) = tmp;
+    }
+}
+
+/* Function Prototypes */
+__global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, const int V_padded);
+__global__ void __launch_bounds__(1024) kernel_phase2_row(int *d_D, const int r, const int V_padded);
+__global__ void __launch_bounds__(1024) kernel_phase2_col(int *d_D, const int r, const int V_padded, const int row_offset, const int row_limit);
+__global__ void __launch_bounds__(1024) kernel_phase3(int *d_D, const int r, const int V_padded, const int row_offset);
 
 void input(char *infile);
 void output(char *outfile);
-
 void block_FW(const int dev_id);
 
 /* Main */
-
 int main(int argc, char *argv[]) {
-
-    /*
-        if (argc != 3) {
-            printf("Usage: %s <input> <output>\n", argv[0]);
-            return 1;
-        }
-    */
+    if (argc != 3) {
+        printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+        return 1;
+    }
 
     input(argv[1]);
 
@@ -51,15 +81,19 @@ int main(int argc, char *argv[]) {
     size_t size = (size_t)V_padded * V_padded * sizeof(int);
 
     // Enable peer access between 2 GPUs
-    hipSetDevice(0);
-    hipDeviceEnablePeerAccess(1, 0);
-    hipSetDevice(1);
-    hipDeviceEnablePeerAccess(0, 0);
+    // Assuming 2 GPUs are available as per hw3-3 template
+    int n_devices;
+    hipGetDeviceCount(&n_devices);
+    if (n_devices > 1) {
+        hipSetDevice(0);
+        hipDeviceEnablePeerAccess(1, 0);
+        hipSetDevice(1);
+        hipDeviceEnablePeerAccess(0, 0);
+    }
 
 #pragma omp parallel num_threads(2)
     {
         const int dev_id = omp_get_thread_num();
-
         hipSetDevice(dev_id);
 
         hipStreamCreate(&stream_main[dev_id]);
@@ -73,6 +107,8 @@ int main(int argc, char *argv[]) {
         hipMalloc(&d_D[dev_id], size);
 
         // H2D: copy full matrix to each GPU
+        // Note: In a more optimized multi-GPU setup, we might only copy parts,
+        // but we stick to hw3-3 template which copies everything initially.
         hipMemcpy(d_D[dev_id], D, size, hipMemcpyHostToDevice);
 
 #pragma omp barrier
@@ -85,11 +121,14 @@ int main(int argc, char *argv[]) {
         const int row_mid = round / 2;
         const int row_block_start = (dev_id == 0) ? 0 : row_mid;
         const int row_block_count = (dev_id == 0) ? row_mid : (round - row_mid);
+
         const int row_start = row_block_start * BLOCKING_FACTOR;
         const int row_num = row_block_count * BLOCKING_FACTOR;
 
         // Copy back only the owned rows from each GPU
-        hipMemcpy(D + (size_t)row_start * V_padded, d_D[dev_id] + (size_t)row_start * V_padded, (size_t)row_num * V_padded * sizeof(int), hipMemcpyDeviceToHost);
+        if (row_num > 0) {
+            hipMemcpy(D + (size_t)row_start * V_padded, d_D[dev_id] + (size_t)row_start * V_padded, (size_t)row_num * V_padded * sizeof(int), hipMemcpyDeviceToHost);
+        }
 
         hipFree(d_D[dev_id]);
 
@@ -103,14 +142,12 @@ int main(int argc, char *argv[]) {
     }  // end parallel region
 
     output(argv[2]);
-
     return 0;
 }
 
 /* Function Definitions */
 
 void block_FW(const int dev_id) {
-
     const int round = V_padded / BLOCKING_FACTOR;
     dim3 threads_per_block(HALF_BLOCK, HALF_BLOCK);
 
@@ -118,6 +155,7 @@ void block_FW(const int dev_id) {
     const int start_row_block = (dev_id == 0) ? 0 : row_mid;
     const int num_row_blocks = (dev_id == 0) ? row_mid : (round - row_mid);
 
+    // Grids
     dim3 grid_p2_row(round, 1);
     dim3 grid_p2_col(num_row_blocks, 1);
     dim3 grid_p3(round, num_row_blocks);
@@ -142,24 +180,35 @@ void block_FW(const int dev_id) {
             size_t offset = (size_t)r * BLOCKING_FACTOR * V_padded;
             const int peer_id = 1 - dev_id;
 
+            // Only sync P2P copy if 2 GPUs exist
             hipMemcpyPeer(d_D[peer_id] + offset, peer_id, d_D[dev_id] + offset, dev_id, copy_size);
         }
 
 #pragma omp barrier
 
         // Phase 2 col + Phase 3 on both devices, using updated pivot row
-        hipStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
+        // Need to ensure pivot row data arrived?
+        // hipMemcpyPeer is blocking on host for the stream?
+        // Actually hipMemcpyPeer is synchronous by default.
+        // If we want async, we should use hipMemcpyPeerAsync.
+        // But here standard logic is fine since we have a barrier.
 
-        kernel_phase2_col<<<grid_p2_col, threads_per_block, 0, stream_col[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block, num_row_blocks);
-        hipEventRecord(event_p2_col_done[dev_id], stream_col[dev_id]);
+        // Wait for own P2 row to finish (if owner) or data to arrive (implicit by barrier+sync copy)
+        // However, the kernels need to wait for previous ops.
 
-        hipStreamWaitEvent(stream_main[dev_id], event_p2_col_done[dev_id], 0);
+        if (dev_id == owner_id) {
+            hipStreamWaitEvent(stream_main[dev_id], event_p2_row_done[dev_id], 0);
+        }
+        // If not owner, the data was copied via hipMemcpyPeer (sync), so it's ready.
 
-        kernel_phase3<<<grid_p3, threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block);
+        if (num_row_blocks > 0) {
+            kernel_phase2_col<<<grid_p2_col, threads_per_block, 0, stream_col[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block, num_row_blocks);
+            hipEventRecord(event_p2_col_done[dev_id], stream_col[dev_id]);
 
-        hipDeviceSynchronize();
+            hipStreamWaitEvent(stream_main[dev_id], event_p2_col_done[dev_id], 0);
 
-#pragma omp barrier
+            kernel_phase3<<<grid_p3, threads_per_block, 0, stream_main[dev_id]>>>(d_D[dev_id], r, V_padded, start_row_block);
+        }
     }
 }
 
@@ -168,13 +217,10 @@ void input(char *infile) {
     fread(&V, sizeof(int), 1, file);
     fread(&E, sizeof(int), 1, file);
 
-    // Calculate padded size (round up to multiple of 64)
     V_padded = (V + BLOCKING_FACTOR - 1) / BLOCKING_FACTOR * BLOCKING_FACTOR;
 
-    // Use pinned memory for faster host-device transfer
     hipHostAlloc(&D, (size_t)V_padded * V_padded * sizeof(int), hipHostAllocDefault);
 
-    // Initialize with INF (and 0 diagonal), including padding
     for (int i = 0; i < V_padded; ++i)
         for (int j = 0; j < V_padded; ++j)
             D[(size_t)i * V_padded + j] = (i == j) ? 0 : INF;
@@ -184,46 +230,33 @@ void input(char *infile) {
         fread(pair, sizeof(int), 3, file);
         D[(size_t)pair[0] * V_padded + pair[1]] = pair[2];
     }
-
     fclose(file);
 }
 
 void output(char *outfile) {
     FILE *f = fopen(outfile, "wb");
-    // Write only the valid part (V x V), skipping padding
     for (int i = 0; i < V; ++i)
         fwrite(&D[(size_t)i * V_padded], sizeof(int), V, f);
     fclose(f);
-
-    hipFreeHost(D);  // Free pinned memory
+    hipFreeHost(D);
 }
 
-/* Kernels */
+/* Kernels - Logic from hw3-2, Adapted for Multi-GPU (offsets) */
 
-__global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
-    const int tx = threadIdx.x;  // 0..31
-    const int ty = threadIdx.y;  // 0..31
+__global__ void __launch_bounds__(1024) kernel_phase1(int *d_D, const int r, const int V_padded) {
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
 
-    // Shared Memory for the 64x64 block
-    // [OPT] Shared memory tile + extra column (+1) to reduce global memory traffic and avoid shared memory bank conflicts.
-    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
+    // Shared Memory with padding (+1) from hw3-2
+    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
 
-    // Global Memory Offset for the Pivot Block (r, r)
     const int b_start = (r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
 
-    // 1. Load Global -> Shared (Each thread loads 4 ints)
-    // [OPT] Coalesced global memory loads: threads in a warp read contiguous elements of each row in the 64x64 tile.
-    // Access pattern: Top-Left, Top-Right, Bottom-Left, Bottom-Right relative to thread
-    sm_pivot[ty][tx] = d_D[b_start + ty * V_padded + tx];
-    sm_pivot[ty][tx + HALF_BLOCK] = d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_pivot[ty + HALF_BLOCK][tx] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
+    // Use vectorized load
+    load_block_int4(d_D + b_start, V_padded, sm_pivot);
     __syncthreads();
 
-    // 2. Floyd-Warshall Computation within the block
-
 #pragma unroll 32
-
     for (int k = 0; k < BLOCKING_FACTOR; ++k) {
         const int r0 = sm_pivot[ty][k];
         const int r1 = sm_pivot[ty + HALF_BLOCK][k];
@@ -237,39 +270,25 @@ __global__ void kernel_phase1(int *d_D, const int r, const int V_padded) {
         __syncthreads();
     }
 
-    // 3. Write Shared -> Global
-    d_D[b_start + ty * V_padded + tx] = sm_pivot[ty][tx];
-    d_D[b_start + ty * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty][tx + HALF_BLOCK];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + tx] = sm_pivot[ty + HALF_BLOCK][tx];
-    d_D[b_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK];
+    store_block_int4(d_D + b_start, V_padded, sm_pivot);
 }
 
-__global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
+__global__ void __launch_bounds__(1024) kernel_phase2_row(int *d_D, const int r, const int V_padded) {
     const int b_idx_x = blockIdx.x;
-    if (b_idx_x == r) return;  // Skip pivot block itself
+    if (b_idx_x == r) return;
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
-    const int b_idx_y = r;
+    const int b_idx_y = r;  // Fixed row for this phase
 
-    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
-    __shared__ int sm_self[BLOCKING_FACTOR][BLOCKING_FACTOR];
+    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
+    __shared__ int sm_self[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
 
-    const size_t pivot_start = (size_t)(r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
-    const size_t self_start = (size_t)(b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
+    const int pivot_start = (r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
+    const int self_start = (b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
 
-    // Load pivot
-    sm_pivot[ty][tx] = d_D[pivot_start + ty * V_padded + tx];
-    sm_pivot[ty][tx + HALF_BLOCK] = d_D[pivot_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_pivot[ty + HALF_BLOCK][tx] = d_D[pivot_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[pivot_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
-    // Load self
-    sm_self[ty][tx] = d_D[self_start + ty * V_padded + tx];
-    sm_self[ty][tx + HALF_BLOCK] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_self[ty + HALF_BLOCK][tx] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
+    load_block_int4(d_D + pivot_start, V_padded, sm_pivot);
+    load_block_int4(d_D + self_start, V_padded, sm_self);
     __syncthreads();
 
     int reg_self[2][2];
@@ -289,43 +308,35 @@ __global__ void kernel_phase2_row(int *d_D, const int r, const int V_padded) {
         reg_self[0][1] = min(reg_self[0][1], r0 + c1);
         reg_self[1][0] = min(reg_self[1][0], r1 + c0);
         reg_self[1][1] = min(reg_self[1][1], r1 + c1);
-        // no syncthreads needed here
     }
 
-    // Write back
-    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
+    sm_self[ty][tx] = reg_self[0][0];
+    sm_self[ty][tx + HALF_BLOCK] = reg_self[0][1];
+    sm_self[ty + HALF_BLOCK][tx] = reg_self[1][0];
+    sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = reg_self[1][1];
+
+    __syncthreads();
+    store_block_int4(d_D + self_start, V_padded, sm_self);
 }
 
-__global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, const int row_offset, const int row_limit) {
+__global__ void __launch_bounds__(1024) kernel_phase2_col(int *d_D, const int r, const int V_padded, const int row_offset, const int row_limit) {
+    const int b_idx_y = blockIdx.x + row_offset;  // Apply Offset
+    if (b_idx_y == r) return;
+    // Safety check for multi-gpu bounds (though launch grid should be exact)
+    if (b_idx_y >= row_offset + row_limit) return;
+
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
+    const int b_idx_x = r;  // Fixed col for this phase
 
-    const int b_idx_y = blockIdx.x + row_offset;
-    if (b_idx_y == r || b_idx_y >= row_offset + row_limit) return;  // Skip pivot block and out-of-range blocks
+    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
+    __shared__ int sm_self[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
 
-    const int b_idx_x = r;
+    const int pivot_start = (r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
+    const int self_start = (b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
 
-    __shared__ int sm_pivot[BLOCKING_FACTOR][BLOCKING_FACTOR];
-    __shared__ int sm_self[BLOCKING_FACTOR][BLOCKING_FACTOR];
-
-    const size_t pivot_start = (size_t)(r * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
-    const size_t self_start = (size_t)(b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
-
-    // Load pivot (r, r)
-    sm_pivot[ty][tx] = d_D[pivot_start + ty * V_padded + tx];
-    sm_pivot[ty][tx + HALF_BLOCK] = d_D[pivot_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_pivot[ty + HALF_BLOCK][tx] = d_D[pivot_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_pivot[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[pivot_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
-    // Load self (block (y, r))
-    sm_self[ty][tx] = d_D[self_start + ty * V_padded + tx];
-    sm_self[ty][tx + HALF_BLOCK] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_self[ty + HALF_BLOCK][tx] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
+    load_block_int4(d_D + pivot_start, V_padded, sm_pivot);
+    load_block_int4(d_D + self_start, V_padded, sm_self);
     __syncthreads();
 
     int reg_self[2][2];
@@ -345,47 +356,40 @@ __global__ void kernel_phase2_col(int *d_D, const int r, const int V_padded, con
         reg_self[0][1] = min(reg_self[0][1], r0 + c1);
         reg_self[1][0] = min(reg_self[1][0], r1 + c0);
         reg_self[1][1] = min(reg_self[1][1], r1 + c1);
-        // no syncthreads needed here
     }
 
-    // Write back
-    d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
-    d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
-    d_D[self_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)] = reg_self[1][1];
+    sm_self[ty][tx] = reg_self[0][0];
+    sm_self[ty][tx + HALF_BLOCK] = reg_self[0][1];
+    sm_self[ty + HALF_BLOCK][tx] = reg_self[1][0];
+    sm_self[ty + HALF_BLOCK][tx + HALF_BLOCK] = reg_self[1][1];
+
+    __syncthreads();
+    store_block_int4(d_D + self_start, V_padded, sm_self);
 }
 
-__global__ void kernel_phase3(int *d_D, const int r, const int V_padded, const int row_offset) {
+__global__ void __launch_bounds__(1024) kernel_phase3(int *d_D, const int r, const int V_padded, const int row_offset) {
     const int b_idx_x = blockIdx.x;
-    const int b_idx_y = blockIdx.y + row_offset;
+    const int b_idx_y = blockIdx.y + row_offset;  // Apply Offset
 
-    if (b_idx_x == r || b_idx_y == r) return;  // Skip Phase 1 & 2 blocks
+    if (b_idx_x == r || b_idx_y == r) return;
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
 
-    __shared__ int sm_row[BLOCKING_FACTOR][BLOCKING_FACTOR];  // Row block (y, r)
-    __shared__ int sm_col[BLOCKING_FACTOR][BLOCKING_FACTOR];  // Col block (r, x)
+    __shared__ int sm_row[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
+    __shared__ int sm_col[BLOCKING_FACTOR][BLOCKING_FACTOR + 1];
 
-    const size_t row_start = (size_t)(b_idx_y * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
-    const size_t col_start = (size_t)(r * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
-    const size_t self_start = (size_t)(b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
+    const int row_start = (b_idx_y * BLOCKING_FACTOR) * V_padded + (r * BLOCKING_FACTOR);
+    const int col_start = (r * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
+    const int self_start = (b_idx_y * BLOCKING_FACTOR) * V_padded + (b_idx_x * BLOCKING_FACTOR);
 
-    // Load row block
-    sm_row[ty][tx] = d_D[row_start + ty * V_padded + tx];
-    sm_row[ty][tx + HALF_BLOCK] = d_D[row_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_row[ty + HALF_BLOCK][tx] = d_D[row_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_row[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[row_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
-    // Load col block
-    sm_col[ty][tx] = d_D[col_start + ty * V_padded + tx];
-    sm_col[ty][tx + HALF_BLOCK] = d_D[col_start + ty * V_padded + (tx + HALF_BLOCK)];
-    sm_col[ty + HALF_BLOCK][tx] = d_D[col_start + (ty + HALF_BLOCK) * V_padded + tx];
-    sm_col[ty + HALF_BLOCK][tx + HALF_BLOCK] = d_D[col_start + (ty + HALF_BLOCK) * V_padded + (tx + HALF_BLOCK)];
-
+    load_block_int4(d_D + row_start, V_padded, sm_row);
+    load_block_int4(d_D + col_start, V_padded, sm_col);
     __syncthreads();
 
     int reg_self[2][2];
+    // Direct global load for self block as in hw3-2 logic (register blocking)
+    // Note: hw3-2 Phase 3 loaded self into registers directly, not shared memory
     reg_self[0][0] = d_D[self_start + ty * V_padded + tx];
     reg_self[0][1] = d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)];
     reg_self[1][0] = d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx];
@@ -404,7 +408,6 @@ __global__ void kernel_phase3(int *d_D, const int r, const int V_padded, const i
         reg_self[1][1] = min(reg_self[1][1], r1 + c1);
     }
 
-    // Write back
     d_D[self_start + ty * V_padded + tx] = reg_self[0][0];
     d_D[self_start + ty * V_padded + (tx + HALF_BLOCK)] = reg_self[0][1];
     d_D[self_start + (ty + HALF_BLOCK) * V_padded + tx] = reg_self[1][0];
