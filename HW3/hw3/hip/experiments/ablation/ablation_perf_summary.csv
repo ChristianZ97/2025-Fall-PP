@@ -1,0 +1,7 @@
+Version,AblationTarget,GrandTotalTime_ms,TotalComputeTime_ms,TotalCommTime_ms
+hw3-2_baseline,Unknown,90254.589,29928.962,2409.414
+hw3-2_default_unroll,Unknown,88682.035,34106.587999999996,2375.5510000000004
+hw3-2_no_launch_bound,Unknown,86724.691,33657.733,2364.4420000000005
+hw3-2_no_pad,Unknown,82992.68299999999,30051.155000000002,2365.47
+hw3-2_no_unroll,Unknown,85534.62,32469.644,2365.191
+hw3-2_opt,Unknown,87110.01000000001,33740.996,2364.456

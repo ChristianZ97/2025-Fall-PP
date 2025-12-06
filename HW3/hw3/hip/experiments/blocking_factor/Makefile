@@ -8,7 +8,7 @@ HIPCC = hipcc
 # -std=c++11 -O3: Standard optimization
 # --offload-arch=gfx908: Target architecture (match this to your specific AMD GPU if not MI100)
 # -DPROFILING: Preserved from your original Makefile request
-HIPFLAGS = -std=c++11 -O3 --offload-arch=gfx908 -DPROFILING
+HIPFLAGS = -std=c++11 -O3 --offload-arch=gfx908
 
 # Linker flags (Math library is commonly needed)
 LDFLAGS = -lm
