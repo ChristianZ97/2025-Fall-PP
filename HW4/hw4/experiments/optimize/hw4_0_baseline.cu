@@ -1,6 +1,6 @@
 // hw4.cu
 
-#include <hip/hip_runtime.h>
+#include <cuda.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -13,7 +13,8 @@
 
 void input(char *input_filename);
 void output(char *output_filename);
-void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
+// void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
+void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream);
 
 __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d);
 
@@ -23,7 +24,9 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 // (BR + 2 * BC) * d * 4 <= 48KB
 // BR + 2 * BC <= 192, if d = 64
 #define BR 32
-#define BC 16
+#define BC 32
+#define PADDING 0
+#define NUM_STREAM 1
 
 // Host Variables
 static int B, N, d;
@@ -33,36 +36,24 @@ static float *d_Q, *d_K, *d_V, *d_O;
 int main(int argc, char *argv[]) {
 
 #ifdef PROFILING
-    // -------------------------
-    // CPU-side I/O timing
-    // -------------------------
-    double time_io_ms = 0.0;
-
-    // -------------------------
-    // Device-side commu timing (mem + transfer)
-    // -------------------------
-    double time_commu_ms = 0.0;
-
-    // -------------------------
-    // Device-side compute timing
-    // -------------------------
-    double time_comp_ms = 0.0;
+    double time_io_ms = 0.0; // CPU-side I/O timing
+    double time_commu_ms = 0.0; // Device-side commu timing (mem + transfer)
+    double time_comp_ms = 0.0; // Device-side compute timing
 
     // CUDA events for H2D / D2H / compute
-    hipEvent_t event_h2d_start, event_h2d_stop;
-    hipEvent_t event_d2h_start, event_d2h_stop;
-    hipEvent_t event_comp_start, event_comp_stop;
+    cudaEvent_t event_h2d_start, event_h2d_stop;
+    cudaEvent_t event_d2h_start, event_d2h_stop;
+    cudaEvent_t event_comp_start, event_comp_stop;
 
-    hipEventCreate(&event_h2d_start);
-    hipEventCreate(&event_h2d_stop);
-    hipEventCreate(&event_d2h_start);
-    hipEventCreate(&event_d2h_stop);
-    hipEventCreate(&event_comp_start);
-    hipEventCreate(&event_comp_stop);
+    cudaEventCreate(&event_h2d_start);
+    cudaEventCreate(&event_h2d_stop);
+    cudaEventCreate(&event_d2h_start);
+    cudaEventCreate(&event_d2h_stop);
+    cudaEventCreate(&event_comp_start);
+    cudaEventCreate(&event_comp_stop);
 #endif
 
 #ifdef PROFILING
-    // ---- input I/O ----
     clock_t io_start = clock();
 #endif
 
@@ -76,73 +67,95 @@ int main(int argc, char *argv[]) {
     size_t size = B * N * d * sizeof(float);
 
 #ifdef PROFILING
-    // ---- mem alloc (hipMalloc) ----
     clock_t alloc_start = clock();
 #endif
 
-    hipMalloc(&d_Q, size);
-    hipMalloc(&d_K, size);
-    hipMalloc(&d_V, size);
-    hipMalloc(&d_O, size);
+    cudaMalloc(&d_Q, size);
+    cudaMalloc(&d_K, size);
+    cudaMalloc(&d_V, size);
+    cudaMalloc(&d_O, size);
 
 #ifdef PROFILING
     clock_t alloc_end = clock();
     time_commu_ms += 1000.0 * (alloc_end - alloc_start) / CLOCKS_PER_SEC;
 #endif
 
-    // -------------------------
-    // H2D transfer (Q, K, V)
-    // -------------------------
-#ifdef PROFILING
-    hipEventRecord(event_h2d_start);
-#endif
-
-    hipMemcpy(d_Q, Q, size, hipMemcpyHostToDevice);
-    hipMemcpy(d_K, K, size, hipMemcpyHostToDevice);
-    hipMemcpy(d_V, V, size, hipMemcpyHostToDevice);
-
-#ifdef PROFILING
-    hipEventRecord(event_h2d_stop);
-    hipEventSynchronize(event_h2d_stop);
-#endif
-
-    // -------------------------
-    // Computation (kernel)
-    // -------------------------
-#ifdef PROFILING
-    hipEventRecord(event_comp_start);
-#endif
+/*
+    cudaMemcpy(d_Q, Q, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_K, K, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_V, V, size, cudaMemcpyHostToDevice);
 
     flash_attention(d_Q, d_K, d_V, d_O, B, N, d);
 
+    cudaMemcpy(O, d_O, size, cudaMemcpyDeviceToHost);
+*/
+
+    cudaStream_t streams[NUM_STREAM];
+    for (int i = 0; i < NUM_STREAM; i++)
+        cudaStreamCreate(&streams[i]);
+
+    const int B_chunk = B / NUM_STREAM;
+    const int remainder = B % NUM_STREAM;
+
+    int batch_offset = 0;
+    for (int i = 0; i < NUM_STREAM; i++) {
+
+        const int my_chunk = B_chunk + ((i < remainder) ? 1 : 0);
+        if (my_chunk == 0) continue;
+
+        size_t chunk_size = (size_t)my_chunk * N * d * sizeof(float);
+        const int stream_offset = batch_offset * N * d;
+
 #ifdef PROFILING
-    hipEventRecord(event_comp_stop);
-    hipEventSynchronize(event_comp_stop);
+        cudaEventRecord(event_h2d_start); // H2D transfer (Q, K, V)
 #endif
 
-    // -------------------------
-    // D2H transfer (O)
-    // -------------------------
-#ifdef PROFILING
-    hipEventRecord(event_d2h_start);
-#endif
-
-    hipMemcpy(O, d_O, size, hipMemcpyDeviceToHost);
+        cudaMemcpyAsync(d_Q + stream_offset, Q + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
+        cudaMemcpyAsync(d_K + stream_offset, K + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
+        cudaMemcpyAsync(d_V + stream_offset, V + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
 
 #ifdef PROFILING
-    hipEventRecord(event_d2h_stop);
-    hipEventSynchronize(event_d2h_stop);
+        cudaEventRecord(event_h2d_stop); // H2D transfer (Q, K, V)
+        cudaEventSynchronize(event_h2d_stop); // H2D transfer (Q, K, V)
 #endif
 
 #ifdef PROFILING
-    // ---- mem free (hipFree) ----
+        cudaEventRecord(event_comp_start); // Computation (kernel)
+#endif
+
+        flash_attention(d_Q + stream_offset, d_K + stream_offset, d_V + stream_offset, d_O + stream_offset, my_chunk, N, d, streams[i]);
+
+#ifdef PROFILING
+        cudaEventRecord(event_comp_stop); // Computation (kernel)
+        cudaEventSynchronize(event_comp_stop); // Computation (kernel)
+#endif
+
+#ifdef PROFILING
+        cudaEventRecord(event_d2h_start); // D2H transfer (O)
+#endif
+
+        cudaMemcpyAsync(O + stream_offset, d_O + stream_offset, chunk_size, cudaMemcpyDeviceToHost, streams[i]);
+
+#ifdef PROFILING
+        cudaEventRecord(event_d2h_stop); // D2H transfer (O)
+        cudaEventSynchronize(event_d2h_stop); // D2H transfer (O)
+#endif
+
+        batch_offset += my_chunk;
+    }
+
+#ifdef PROFILING
     clock_t free_start = clock();
 #endif
 
-    hipFree(d_Q);
-    hipFree(d_K);
-    hipFree(d_V);
-    hipFree(d_O);
+    cudaDeviceSynchronize();
+    for (int i = 0; i < NUM_STREAM; i++)
+        cudaStreamDestroy(streams[i]);
+
+    cudaFree(d_Q);
+    cudaFree(d_K);
+    cudaFree(d_V);
+    cudaFree(d_O);
 
 #ifdef PROFILING
     clock_t free_end = clock();
@@ -150,7 +163,6 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef PROFILING
-    // ---- output I/O ----
     clock_t io_write_start = clock();
 #endif
 
@@ -164,13 +176,13 @@ int main(int argc, char *argv[]) {
 #ifdef PROFILING
     // ============================================================
     //   - io: input + output
-    //   - commu: hipMalloc + hipFree + H2D + D2H
+    //   - commu: cudaMalloc + cudaFree + H2D + D2H
     //   - comp: flash_attention
     // ============================================================
     float t_h2d_f = 0.0f, t_d2h_f = 0.0f, t_comp_f = 0.0f;
-    hipEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
-    hipEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
-    hipEventElapsedTime(&t_comp_f, event_comp_start, event_comp_stop);
+    cudaEventElapsedTime(&t_h2d_f, event_h2d_start, event_h2d_stop);
+    cudaEventElapsedTime(&t_d2h_f, event_d2h_start, event_d2h_stop);
+    cudaEventElapsedTime(&t_comp_f, event_comp_start, event_comp_stop);
 
     time_commu_ms += (double)t_h2d_f + (double)t_d2h_f;
     time_comp_ms = (double)t_comp_f;
@@ -179,12 +191,12 @@ int main(int argc, char *argv[]) {
     // total,io,commu,comp
     fprintf(stderr, "[PROF_RESULT],%.3f,%.3f,%.3f,%.3f\n", total_ms, time_io_ms, time_commu_ms, time_comp_ms);
 
-    hipEventDestroy(event_h2d_start);
-    hipEventDestroy(event_h2d_stop);
-    hipEventDestroy(event_d2h_start);
-    hipEventDestroy(event_d2h_stop);
-    hipEventDestroy(event_comp_start);
-    hipEventDestroy(event_comp_stop);
+    cudaEventDestroy(event_h2d_start);
+    cudaEventDestroy(event_h2d_stop);
+    cudaEventDestroy(event_d2h_start);
+    cudaEventDestroy(event_d2h_stop);
+    cudaEventDestroy(event_comp_start);
+    cudaEventDestroy(event_comp_stop);
 #endif
 
     return 0;
@@ -196,7 +208,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // Uses the y-dimension of the grid (blockIdx.y) to process different batches in parallel.
     // This maps the B x N problem structure to the GPU hardware hierarchy efficiently.
     const int batch_idx = blockIdx.y;
-    const long long batch_offset = batch_idx * (N * d);
+    const long long batch_offset = (long long)batch_idx * (N * d);
 
     d_Q += batch_offset;
     d_K += batch_offset;
@@ -206,7 +218,8 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // --- ALGORITHM 1 LOGIC ---
 
     const int tx = threadIdx.x;
-    const int bx = blockIdx.x;  // Block index corresponding to loop "i" in Algorithm
+    const int bx = blockIdx.x;  // Block index corresponding to loop "i" in Algorithm 
+    const int bd = blockDim.x;
 
     // Global row index for Q_i
     const int row_offset_Q = bx * BR;
@@ -219,8 +232,8 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 
     // Line 6 & 8: Buffers for loading blocks into SRAM
     float *sm_Q = sram;
-    float *sm_K = sram + BR * d;
-    float *sm_V = sram + BR * d + BC * d;
+    float *sm_K = sram + BR * (d + PADDING);
+    float *sm_V = sram + BR * (d + PADDING) + BC * (d + PADDING);
 
     // Line 2: Initialize O_i, l_i, m_i
     // O_i corresponds to the accumulator for the current row
@@ -228,12 +241,12 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // Storing the accumulator O_i in registers (local array) rather than writing to global memory
     // in every iteration reduces memory traffic.
     float O_i[64];
-
-// [Optimization: Loop Unrolling]
-// #pragma unroll hints the compiler to expand the loop inline.
-// This reduces loop control overhead (branch prediction, index increment)
-// and exposes more instructions for pipeline parallelism.
-#pragma unroll
+    
+    // [Optimization: Loop Unrolling]
+    // // #pragma unroll hints the compiler to expand the loop inline.
+    // This reduces loop control overhead (branch prediction, index increment)
+    // and exposes more instructions for pipeline parallelism.
+    // #pragma unroll
     for (int t = 0; t < d; t++)
         O_i[t] = 0.0f;
 
@@ -241,32 +254,52 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     float l_i = 0.0f;
     float m_i = -FLT_MAX;
 
-// Line 8: Load Q_i from HBM to on-chip SRAM
-// [Optimization: Global to Shared Memory Load]
-// Loading the query block once into Shared Memory so it can be reused
-// across the inner loop iterations (against many K/V blocks).
-#pragma unroll
+    // Line 8: Load Q_i from HBM to on-chip SRAM
+    // [Optimization: Global to Shared Memory Load]
+    // Loading the query block once into Shared Memory so it can be reused
+    // across the inner loop iterations (against many K/V blocks).
+
+    // #pragma unroll
     for (int t = 0; t < d; t++)
         sm_Q[tx * d + t] = d_Q[(row_offset_Q + tx) * d + t];
-    //__syncthreads();
 
+    /*
+    // #pragma unroll
+    for (int i = tx; i < BR * d; i += bd) {
+        const int r = i / d; 
+        const int c = i % d;
+        sm_Q[r * (d + PADDING) + c] = d_Q[row_offset_Q * d + i];
+    }
+    */
     // Line 5: Outer loop "for 1 <= j <= Tc"
     // [Optimization: Tiling]
     // The core FlashAttention technique: processing the matrix in small tiles (BC)
     // to respect the limited size of Shared Memory.
     for (int j = 0; j < N; j += BC) {
 
-// Line 6: Load K_j, V_j from HBM to SRAM
-// [Optimization: Cooperative Loading]
-// Threads cooperate to load data into shared memory.
-#pragma unroll
-        for (int t = tx; t < BC; t += blockDim.x) {
+        // Line 6: Load K_j, V_j from HBM to SRAM
+        // [Optimization: Cooperative Loading]
+        // Threads cooperate to load data into shared memory.
+
+        // #pragma unroll
+        for (int t = tx; t < BC; t += bd) {
             for (int k = 0; k < d; k++) {
                 sm_K[t * d + k] = d_K[(j + t) * d + k];
                 sm_V[t * d + k] = d_V[(j + t) * d + k];
             }
         }
-        __syncthreads();  // Ensure K and V are fully loaded before computation
+
+        /*
+        // #pragma unroll
+        for (int i = tx; i < BC * d; i += bd) {
+            const int r = i / d;
+            const int c = i % d;
+            sm_K[r * (d + PADDING) + c] = d_K[(j * d) + i];
+            sm_V[r * (d + PADDING) + c] = d_V[(j * d) + i];
+        }
+        */
+
+        __syncthreads(); // Ensure K and V are fully loaded before computation
 
         // Line 9: Compute S_ij = Q_i * K_j^T
         float S_ij[BC];
@@ -278,7 +311,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
             // [Optimization: Shared Memory Access]
             // Accessing operands from sm_Q and sm_K (SRAM) is much faster than HBM.
             for (int t = 0; t < d; t++)
-                score += sm_Q[tx * d + t] * sm_K[k * d + t];
+                score += sm_Q[tx * (d + PADDING) + t] * sm_K[k * (d + PADDING) + t];
             score *= (1.0f / sqrtf((float)d));
 
             S_ij[k] = score;
@@ -318,7 +351,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 
             float P_ij_V_j = 0.0f;
             for (int k = 0; k < BC; k++)
-                P_ij_V_j += P_ij[k] * sm_V[k * d + t];
+                P_ij_V_j += P_ij[k] * sm_V[k * (d + PADDING) + t];
 
             O_i[t] = O_i[t] * exp_m_diff_old + P_ij_V_j;
         }
@@ -332,11 +365,28 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // Line 12 (Finalize): Write O_i to HBM
     // Normalization by diag(l_i)^{-1}
 
-#pragma unroll
+    // #pragma unroll
     for (int t = 0; t < d; t++)
         d_O[(row_offset_Q + tx) * d + t] = O_i[t] / l_i;
+
+    /*
+    float *sm_O = sram;
+    // #pragma unroll
+    for (int t = 0; t < d; t++) {
+        sm_O[tx * (d + PADDING) + t] = O_i[t] / l_i; 
+    }
+    __syncthreads();
+    // #pragma unroll
+    for (int i = tx; i < BR * d; i += bd) {
+        const int r = i / d;
+        const int c = i % d;
+        d_O[(bx * BR * d) + i] = sm_O[r * (d + PADDING) + c];
+    }
+    */
+
 }
 
+/*
 void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d) {
 
     // Line 3: Divide Q into Tr blocks
@@ -348,8 +398,27 @@ void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B
 
     // [Optimization: Dynamic Shared Memory Calculation]
     // Calculates exact shared memory usage required for Q, K, V blocks to maximize usage.
-    size_t sram_size = (BR * d + BC * d + BC * d) * sizeof(float);
+    size_t sram_size = (BR * (d + PADDING) + BC * (d + PADDING) + BC * (d + PADDING)) * sizeof(float);
     flash_attention_kernel<<<blocks_per_grid, threads_per_block, sram_size>>>(d_Q, d_K, d_V, d_O, N, d);
+}
+*/
+
+void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream) {
+
+    // Line 3: Divide Q into Tr blocks
+    // [Optimization: Occupancy / Grid Configuration]
+    // Calculates the grid dimensions to cover the Sequence Length (N) and Batch Size (B).
+    // (N + BR - 1) / BR ensures we have enough blocks to cover N rows.
+    // dim3 blocks_per_grid((N + BR - 1) / BR, B_chunk);
+    dim3 blocks_per_grid((N + BR - 1) / BR);
+    dim3 threads_per_block(BR);
+
+    // [Optimization: Dynamic Shared Memory Calculation]
+    // Calculates exact shared memory usage required for Q, K, V blocks to maximize usage.
+    size_t sram_size = (BR * (d + PADDING) + BC * (d + PADDING) + BC * (d + PADDING)) * sizeof(float);
+
+    for (int i = 0; i < B_chunk; i++)
+        flash_attention_kernel<<<blocks_per_grid, threads_per_block, sram_size, stream>>>(d_Q, d_K, d_V, d_O, N, d);
 }
 
 void input(char *input_filename) {

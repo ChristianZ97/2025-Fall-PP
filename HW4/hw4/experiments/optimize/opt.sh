@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # --- Configuration ---
-OUTPUT_CSV="block_perf_results.csv"
-SUMMARY_CSV="block_perf_summary.csv"
-TEMP_OUT_FILE="temp_block_output.bin"
+OUTPUT_CSV="optimization_perf_results.csv"
+SUMMARY_CSV="optimization_perf_summary.csv"
+TEMP_OUT_FILE="temp_optimize_output.bin"
 
 # --- Check for Testcase Directory Argument ---
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <testcases_directory>"
-    echo "Example: $0 ../testcases"
+    echo "Example: $0 ../../testcases"
     exit 1
 fi
 
@@ -24,13 +24,7 @@ echo "Searching for t01 to t30 in $TESTCASE_DIR ..."
 TESTCASES=()
 # Loop 01 to 30
 for i in {01..30}; do
-    # 使用 printf 確保數字是兩位數 (例如 1 -> 01)
-    # 如果你的 shell 支援 {01..30}，變數 i 本身就會帶有前導零，
-    # 但為了保險起見，也可以直接寫 t$i 如果 bash 版本夠新。
-    # 這裡假設你的環境 bash 展開 {01..30} 會自動補零 (標準 bash 行為)。
-    
     target_file="$TESTCASE_DIR/t${i}"
-    
     if [ -f "$target_file" ]; then
         TESTCASES+=("$target_file")
     else
@@ -47,7 +41,7 @@ fi
 echo "Found $NUM_TESTCASES testcases to run (t01 ~ t30)."
 
 # --- Step 1: Compilation ---
-echo "Step 1: Compiling all block size versions..."
+echo "Step 1: Compiling all optimization versions..."
 make clean > /dev/null
 make all
 if [ $? -ne 0 ]; then
@@ -57,14 +51,14 @@ fi
 
 # --- Step 2: Initialize CSVs ---
 echo "Step 2: Preparing results files..."
-# Updated header to match: total, io, commu, comp
-echo "Version,BR,BC,Testcase,TotalTime_ms,IOTime_ms,CommuTime_ms,ComputeTime_ms" > "$OUTPUT_CSV"
-# Summary keeps total and compute sum
-echo "Version,BR,BC,GrandTotalTime_ms,GrandComputeTime_ms" > "$SUMMARY_CSV"
+# Updated header: ExeName is the key identifier now
+echo "ExeName,VersionID,Description,Testcase,TotalTime_ms,IOTime_ms,CommuTime_ms,ComputeTime_ms" > "$OUTPUT_CSV"
+echo "ExeName,VersionID,Description,GrandTotalTime_ms,GrandComputeTime_ms" > "$SUMMARY_CSV"
 
 # --- Step 3: Run Experiments ---
-# 搜尋並過濾出符合 hw4_XX_XX 格式的執行檔
-EXECUTABLES=($(find . -maxdepth 1 -type f -executable -name "hw4_*" | sort))
+# Search for executables matching hw4_* but exclude .cu and Makefile
+# We use regex to find files that start with hw4_ and are executable
+EXECUTABLES=($(find . -maxdepth 1 -type f -executable -name "hw4_*" | sort -V))
 
 echo "Step 3: Running experiments..."
 echo ""
@@ -72,12 +66,21 @@ echo ""
 for exe in "${EXECUTABLES[@]}"; do
     exe_name=$(basename "$exe")
     
-    # Parse BR and BC from filename (e.g., hw4_64_64)
-    br_val=$(echo "$exe_name" | cut -d'_' -f2)
-    bc_val=$(echo "$exe_name" | cut -d'_' -f3)
+    # Parse Version ID and Description from filename
+    # Format expected: hw4_0_baseline, hw4_1_2D_align, etc.
+    # Extract number after hw4_
+    version_id=$(echo "$exe_name" | cut -d'_' -f2)
+    # Extract description (everything after the number)
+    description=$(echo "$exe_name" | cut -d'_' -f3-)
+
+    # Fallback if parsing fails (just in case filename format varies)
+    if [[ ! "$version_id" =~ ^[0-9]+$ ]]; then
+        version_id="NA"
+        description=$exe_name
+    fi
     
     echo "=========================================="
-    echo "Testing Version: $exe_name (BR: $br_val, BC: $bc_val)"
+    echo "Testing: $exe_name (ID: $version_id, Desc: $description)"
     echo "=========================================="
     
     grand_total_time=0
@@ -91,7 +94,7 @@ for exe in "${EXECUTABLES[@]}"; do
         
         echo -n "  Running $tc_name ... "
         
-        # Run executable, redirect stderr to stdout to capture PROF_RESULT
+        # Run executable
         app_output=$($SRUN_CMD ./$exe_name "$testcase" "$TEMP_OUT_FILE" 2>&1)
         
         # Format: [PROF_RESULT],total,io,commu,comp
@@ -99,8 +102,7 @@ for exe in "${EXECUTABLES[@]}"; do
         
         if [[ -z "$prof_line" ]]; then
             echo "FAILED / TIMEOUT"
-            # Log zero or specific error code
-            echo "$exe_name,$br_val,$bc_val,$tc_name,0,0,0,0" >> "$OUTPUT_CSV"
+            echo "$exe_name,$version_id,$description,$tc_name,0,0,0,0" >> "$OUTPUT_CSV"
         else
             # Extract fields
             total_time=$(echo "$prof_line" | cut -d',' -f2)
@@ -110,11 +112,11 @@ for exe in "${EXECUTABLES[@]}"; do
             
             echo "${total_time} ms (Comp: ${comp_time} ms)"
             
-            # Use bc for floating point arithmetic summation
+            # Summation
             grand_total_time=$(echo "$grand_total_time + $total_time" | bc)
             grand_compute_time=$(echo "$grand_compute_time + $comp_time" | bc)
             
-            echo "$exe_name,$br_val,$bc_val,$tc_name,$total_time,$io_time,$commu_time,$comp_time" >> "$OUTPUT_CSV"
+            echo "$exe_name,$version_id,$description,$tc_name,$total_time,$io_time,$commu_time,$comp_time" >> "$OUTPUT_CSV"
         fi
     done
     
@@ -124,7 +126,7 @@ for exe in "${EXECUTABLES[@]}"; do
     echo "------------------------------------------"
     echo ""
     
-    echo "$exe_name,$br_val,$bc_val,$grand_total_time,$grand_compute_time" >> "$SUMMARY_CSV"
+    echo "$exe_name,$version_id,$description,$grand_total_time,$grand_compute_time" >> "$SUMMARY_CSV"
 
 done
 

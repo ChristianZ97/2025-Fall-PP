@@ -1,0 +1,5 @@
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --metrics achieved_occupancy,sm_efficiency,gld_throughput,gst_throughput,shared_load_throughput,shared_store_throughput ./hw4 ./testcases/t22 temp.out
+
+
+scp -r pp25s057@apollo.cs.nthu.edu.tw:~/hw4/experiments/optimize/optimization_perf_summary.csv ./
+scp -r pp25s057@apollo.cs.nthu.edu.tw:~/hw4/experiments/optimize/optimization_perf_results.csv ./

@@ -7,7 +7,7 @@ NVFLAGS = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61
 LDFLAGS = -lm
 HIPCCFLAGS = -std=c++14 -O3 --offload-arch=gfx908
 
-TARGETS = seq-attention seq-flashattention hw4
+TARGETS = seq-attention seq-flashattention hw4 hw4-amd
 
 all: $(TARGETS)
 

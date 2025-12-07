@@ -11,13 +11,6 @@
 #include <time.h>
 #endif
 
-void input(char *input_filename);
-void output(char *output_filename);
-// void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
-void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream);
-
-__global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d);
-
 // Algorithm 1 Line 1: Set block sizes BR, BC
 // [Optimization: Tiling / Block Size Configuration]
 // Defining block sizes small enough to fit in Shared Memory (SRAM).
@@ -27,6 +20,14 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 #define BC 16
 #define PADDING 1
 #define NUM_STREAM 8
+
+void input(char *input_filename);
+void output(char *output_filename);
+// void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
+void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream);
+
+__global__ void __launch_bounds__(BR, 2) flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d);
+
 
 // Host Variables
 static int B, N, d;
@@ -202,7 +203,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-__global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d) {
+__global__ void __launch_bounds__(BR, 2) flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d) {
 
     // [Optimization: CUDA 2D Alignment / Batch Handling]
     // Uses the y-dimension of the grid (blockIdx.y) to process different batches in parallel.

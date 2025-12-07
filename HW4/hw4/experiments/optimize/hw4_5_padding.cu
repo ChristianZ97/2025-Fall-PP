@@ -26,7 +26,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 #define BR 128
 #define BC 16
 #define PADDING 1
-#define NUM_STREAM 8
+#define NUM_STREAM 1
 
 // Host Variables
 static int B, N, d;

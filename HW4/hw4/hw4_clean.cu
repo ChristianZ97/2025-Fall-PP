@@ -9,7 +9,8 @@
 
 void input(char *input_filename);
 void output(char *output_filename);
-void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
+// void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d);
+void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream);
 
 __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float *d_O, const int N, const int d);
 
@@ -18,8 +19,10 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 // Defining block sizes small enough to fit in Shared Memory (SRAM).
 // (BR + 2 * BC) * d * 4 <= 48KB
 // BR + 2 * BC <= 192, if d = 64
-#define BR 32
-#define BC 32
+#define BR 128
+#define BC 16
+#define PADDING 1
+#define NUM_STREAM 8
 
 // Host Variables
 static int B, N, d;
@@ -37,15 +40,47 @@ int main(int argc, char *argv[]) {
     cudaMalloc(&d_V, size);
     cudaMalloc(&d_O, size);
 
+/*
     cudaMemcpy(d_Q, Q, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_K, K, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V, V, size, cudaMemcpyHostToDevice);
 
-
     flash_attention(d_Q, d_K, d_V, d_O, B, N, d);
 
-
     cudaMemcpy(O, d_O, size, cudaMemcpyDeviceToHost);
+*/
+
+    cudaStream_t streams[NUM_STREAM];
+    for (int i = 0; i < NUM_STREAM; i++)
+        cudaStreamCreate(&streams[i]);
+
+    const int B_chunk = B / NUM_STREAM;
+    const int remainder = B % NUM_STREAM;
+
+    int batch_offset = 0;
+    for (int i = 0; i < NUM_STREAM; i++) {
+
+        const int my_chunk = B_chunk + ((i < remainder) ? 1 : 0);
+        if (my_chunk == 0) continue;
+
+        size_t chunk_size = (size_t)my_chunk * N * d * sizeof(float);
+        const int stream_offset = batch_offset * N * d;
+
+        cudaMemcpyAsync(d_Q + stream_offset, Q + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
+        cudaMemcpyAsync(d_K + stream_offset, K + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
+        cudaMemcpyAsync(d_V + stream_offset, V + stream_offset, chunk_size, cudaMemcpyHostToDevice, streams[i]);
+
+        flash_attention(d_Q + stream_offset, d_K + stream_offset, d_V + stream_offset, d_O + stream_offset, my_chunk, N, d, streams[i]);
+
+        cudaMemcpyAsync(O + stream_offset, d_O + stream_offset, chunk_size, cudaMemcpyDeviceToHost, streams[i]);
+
+        batch_offset += my_chunk;
+    }
+
+    cudaDeviceSynchronize();
+    for (int i = 0; i < NUM_STREAM; i++)
+        cudaStreamDestroy(streams[i]);
+
 
     cudaFree(d_Q);
     cudaFree(d_K);
@@ -63,7 +98,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // Uses the y-dimension of the grid (blockIdx.y) to process different batches in parallel.
     // This maps the B x N problem structure to the GPU hardware hierarchy efficiently.
     const int batch_idx = blockIdx.y;
-    const long long batch_offset = batch_idx * (N * d);
+    const long long batch_offset = (long long)batch_idx * (N * d);
 
     d_Q += batch_offset;
     d_K += batch_offset;
@@ -73,7 +108,8 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // --- ALGORITHM 1 LOGIC ---
 
     const int tx = threadIdx.x;
-    const int bx = blockIdx.x;  // Block index corresponding to loop "i" in Algorithm
+    const int bx = blockIdx.x;  // Block index corresponding to loop "i" in Algorithm 
+    const int bd = blockDim.x;
 
     // Global row index for Q_i
     const int row_offset_Q = bx * BR;
@@ -86,8 +122,8 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 
     // Line 6 & 8: Buffers for loading blocks into SRAM
     float *sm_Q = sram;
-    float *sm_K = sram + BR * d;
-    float *sm_V = sram + BR * d + BC * d;
+    float *sm_K = sram + BR * (d + PADDING);
+    float *sm_V = sram + BR * (d + PADDING) + BC * (d + PADDING);
 
     // Line 2: Initialize O_i, l_i, m_i
     // O_i corresponds to the accumulator for the current row
@@ -112,10 +148,17 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
     // [Optimization: Global to Shared Memory Load]
     // Loading the query block once into Shared Memory so it can be reused
     // across the inner loop iterations (against many K/V blocks).
+    /*
     #pragma unroll
     for (int t = 0; t < d; t++)
         sm_Q[tx * d + t] = d_Q[(row_offset_Q + tx) * d + t];
-    //__syncthreads();
+    */
+    #pragma unroll
+    for (int i = tx; i < BR * d; i += bd) {
+        const int r = i / d; 
+        const int c = i % d;
+        sm_Q[r * (d + PADDING) + c] = d_Q[row_offset_Q * d + i];
+    }
 
     // Line 5: Outer loop "for 1 <= j <= Tc"
     // [Optimization: Tiling]
@@ -126,13 +169,23 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
         // Line 6: Load K_j, V_j from HBM to SRAM
         // [Optimization: Cooperative Loading]
         // Threads cooperate to load data into shared memory.
+        /*
         #pragma unroll
-        for (int t = tx; t < BC; t += blockDim.x) {
+        for (int t = tx; t < BC; t += bd) {
             for (int k = 0; k < d; k++) {
                 sm_K[t * d + k] = d_K[(j + t) * d + k];
                 sm_V[t * d + k] = d_V[(j + t) * d + k];
             }
         }
+        */
+        #pragma unroll
+        for (int i = tx; i < BC * d; i += bd) {
+            const int r = i / d;
+            const int c = i % d;
+            sm_K[r * (d + PADDING) + c] = d_K[(j * d) + i];
+            sm_V[r * (d + PADDING) + c] = d_V[(j * d) + i];
+        }
+
         __syncthreads(); // Ensure K and V are fully loaded before computation
 
         // Line 9: Compute S_ij = Q_i * K_j^T
@@ -145,7 +198,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
             // [Optimization: Shared Memory Access]
             // Accessing operands from sm_Q and sm_K (SRAM) is much faster than HBM.
             for (int t = 0; t < d; t++)
-                score += sm_Q[tx * d + t] * sm_K[k * d + t];
+                score += sm_Q[tx * (d + PADDING) + t] * sm_K[k * (d + PADDING) + t];
             score *= (1.0f / sqrtf((float)d));
 
             S_ij[k] = score;
@@ -185,7 +238,7 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 
             float P_ij_V_j = 0.0f;
             for (int k = 0; k < BC; k++)
-                P_ij_V_j += P_ij[k] * sm_V[k * d + t];
+                P_ij_V_j += P_ij[k] * sm_V[k * (d + PADDING) + t];
 
             O_i[t] = O_i[t] * exp_m_diff_old + P_ij_V_j;
         }
@@ -198,12 +251,28 @@ __global__ void flash_attention_kernel(float *d_Q, float *d_K, float *d_V, float
 
     // Line 12 (Finalize): Write O_i to HBM
     // Normalization by diag(l_i)^{-1}
-
+    /*
     #pragma unroll
     for (int t = 0; t < d; t++)
         d_O[(row_offset_Q + tx) * d + t] = O_i[t] / l_i;
+    */
+
+    float *sm_O = sram;
+    #pragma unroll
+    for (int t = 0; t < d; t++) {
+        sm_O[tx * (d + PADDING) + t] = O_i[t] / l_i; 
+    }
+    __syncthreads();
+    #pragma unroll
+    for (int i = tx; i < BR * d; i += bd) {
+        const int r = i / d;
+        const int c = i % d;
+        d_O[(bx * BR * d) + i] = sm_O[r * (d + PADDING) + c];
+    }
+
 }
 
+/*
 void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B, const int N, const int d) {
 
     // Line 3: Divide Q into Tr blocks
@@ -215,8 +284,24 @@ void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B
 
     // [Optimization: Dynamic Shared Memory Calculation]
     // Calculates exact shared memory usage required for Q, K, V blocks to maximize usage.
-    size_t sram_size = (BR * d + BC * d + BC * d) * sizeof(float);
+    size_t sram_size = (BR * (d + PADDING) + BC * (d + PADDING) + BC * (d + PADDING)) * sizeof(float);
     flash_attention_kernel<<<blocks_per_grid, threads_per_block, sram_size>>>(d_Q, d_K, d_V, d_O, N, d);
+}
+*/
+
+void flash_attention(float *d_Q, float *d_K, float *d_V, float *d_O, const int B_chunk, const int N, const int d, cudaStream_t stream) {
+
+    // Line 3: Divide Q into Tr blocks
+    // [Optimization: Occupancy / Grid Configuration]
+    // Calculates the grid dimensions to cover the Sequence Length (N) and Batch Size (B).
+    // (N + BR - 1) / BR ensures we have enough blocks to cover N rows.
+    dim3 blocks_per_grid((N + BR - 1) / BR, B_chunk);
+    dim3 threads_per_block(BR);
+
+    // [Optimization: Dynamic Shared Memory Calculation]
+    // Calculates exact shared memory usage required for Q, K, V blocks to maximize usage.
+    size_t sram_size = (BR * (d + PADDING) + BC * (d + PADDING) + BC * (d + PADDING)) * sizeof(float);
+    flash_attention_kernel<<<blocks_per_grid, threads_per_block, sram_size, stream>>>(d_Q, d_K, d_V, d_O, N, d);
 }
 
 void input(char *input_filename) {

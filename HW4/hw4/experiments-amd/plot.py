@@ -36,7 +36,7 @@ df_agg = df_agg.sort_values('BR')
 # 轉為長格式 (只包含 Compute, IO, Comm)
 df_melt_sub = df_agg.melt(
     id_vars=['ConfigLabel', 'BR'], 
-    value_vars=['ComputeTime_ms', 'IOTime_ms', 'CommuTime_ms'], # 這裡拿掉 Total
+    value_vars=['ComputeTime_ms', 'IOTime_ms', 'CommuTime_ms'], 
     var_name='Metric', 
     value_name='Time'
 )
@@ -74,22 +74,21 @@ ax = sns.lineplot(
     markersize=11,
     markeredgecolor='white',
     markeredgewidth=1.5,
-    zorder=2  # 確保在網格之上
+    zorder=2 
 )
 
 # 第二層：單獨畫 Total Time (虛線，半透明)
-# 我們手動繪製這條線，以便精確控制樣式
 plt.plot(
     df_agg['ConfigLabel'], 
     df_agg['TotalTime_ms'], 
     color='#C0504D',      # 深紅
     marker='o',           # 圓點
-    linestyle='--',       # 虛線 (避免視覺太重)
+    linestyle='--',       # 虛線
     linewidth=4,          # 稍粗一點
     markersize=12,
-    alpha=0.35,           # ★ 關鍵：透明度 35%
-    label='Total',        # 圖例標籤
-    zorder=1              # 放在最下層，避免蓋住其他線
+    alpha=0.35,           # 透明度 35%
+    label='Total',        
+    zorder=1              
 )
 
 # ==========================================
@@ -102,19 +101,26 @@ plt.ylabel('Accumulated Time (ms)', fontsize=14, fontweight='bold')
 plt.xticks(rotation=0, fontsize=11) 
 plt.yticks(fontsize=12)
 
-# Legend 設定 (合併 seaborn 和 matplotlib 的圖例)
-# 獲取目前的 handles 和 labels
+# Legend 設定
 handles, labels = ax.get_legend_handles_labels()
-# 加上 Total 的 handle (因為是用 plt.plot 畫的，需要手動加，或者依賴自動偵測)
-# 這裡簡單做法：重新呼叫 legend，它會自動抓取所有有 label 的元素
 plt.legend(title=None, fontsize=12, loc='upper right', frameon=True, fancybox=True, framealpha=0.9)
 
-# 數值標註 (Total Time) - 顏色保持深紅實心，清晰可見
+# 數值標註 (Total Time)
+# 找出最低點
+min_total_pos = df_agg['TotalTime_ms'].values.argmin()
+
 for i in range(df_agg.shape[0]):
     total_val = df_agg.iloc[i]['TotalTime_ms']
-    # 數字位置稍微調整，因為線條變淡了，數字就是主角
-    plt.text(i, total_val * 1.05, f'{int(total_val)}', 
-             ha='center', va='bottom', fontsize=11, fontweight='bold', color='#C0504D')
+    
+    if i == min_total_pos:
+        # 最低點：使用空心橢圓圈起來 (facecolor='none', edgecolor='#C0504D')
+        plt.text(i, total_val * 1.05, f'{int(total_val)}', 
+                 ha='center', va='bottom', fontsize=11, fontweight='bold', 
+                 color='#C0504D',
+                 bbox=dict(boxstyle="ellipse,pad=0.3", facecolor='none', edgecolor='#C0504D', linewidth=2))
+    else:
+        plt.text(i, total_val * 1.05, f'{int(total_val)}', 
+                 ha='center', va='bottom', fontsize=11, color='#C0504D')
 
 sns.despine()
 plt.tight_layout()
