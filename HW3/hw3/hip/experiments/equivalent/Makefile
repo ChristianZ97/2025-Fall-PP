@@ -5,10 +5,10 @@ HIPCC  = hipcc
 
 CXXFLAGS      = -O2 -pthread -fopenmp
 # NVIDIA Flags (GTX 1080)
-NVFLAGS       = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 -cudart shared -DPROFILING
+NVFLAGS       = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 -cudart shared
 # AMD Flags (MI210 / MI100, gfx90a is usually for MI210, check if yours is gfx908 or gfx90a)
 # Using gfx90a as default for newer MI210 clusters, change back to gfx908 if needed.
-HIPCCFLAGS    = -std=c++11 -O3 --offload-arch=gfx908 -DPROFILING
+HIPCCFLAGS    = -std=c++11 -O3 --offload-arch=gfx908
 
 LDFLAGS = -lm
 
