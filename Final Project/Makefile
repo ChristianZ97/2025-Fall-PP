@@ -1,39 +1,59 @@
 # ==========================================
-# Simple Makefile for CPU (gcc) and GPU (nvcc)
+# Makefile for C, C++, CUDA
 # ==========================================
 
 # Compilers
-CC   = gcc
-NVCC = nvcc
+CC     = gcc
+CXX    = g++
+NVCC   = nvcc
 
 # Flags
-CFLAGS  = -O2 -fopenmp -lm
-NVFLAGS = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 -cudart shared -Xcompiler="-fopenmp"
+CFLAGS    = -O2 -fopenmp
+CXXFLAGS  = -O2 -pthread -fopenmp
+NVFLAGS   = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 -cudart shared -Xcompiler="-fopenmp"
+LDFLAGS   = -lm
 
-# Automatically find source files
-C_SOURCES  := $(wildcard *.c)
-CU_SOURCES := $(wildcard *.cu)
+# ------------------------------------------
+# Source Detection
+# ------------------------------------------
+C_SRCS    := $(wildcard *.c)
+CXX_SRCS  := $(wildcard *.cc)
+CU_SRCS   := $(wildcard *.cu)
 
-# Generate executable names
-C_TARGETS  := $(C_SOURCES:.c=)
-CU_TARGETS := $(CU_SOURCES:.cu=)
+# ------------------------------------------
+# Target Generation (Adding Suffixes!)
+# ------------------------------------------
+# nbody.c  -> nbody_c
+# nbody.cu -> nbody_cu
+C_EXES    := $(C_SRCS:.c=_c)
+CXX_EXES  := $(CXX_SRCS:.cc=_cc)
+CU_EXES   := $(CU_SRCS:.cu=_cu)
 
-.PHONY: all clean
+.PHONY: all clean c cpp cuda
 
-# Default target: build both CPU and GPU executables
-all: $(C_TARGETS) $(CU_TARGETS)
+all: c cpp cuda
 	@echo "Build complete."
-	@echo "CPU Targets: $(C_TARGETS)"
-	@echo "GPU Targets: $(CU_TARGETS)"
 
-# Rule for C files (CPU)
-%: %.c
-	$(CC) $(CFLAGS) -o $@ $<
+c: $(C_EXES)
+cpp: $(CXX_EXES)
+cuda: $(CU_EXES)
 
-# Rule for CUDA files (GPU)
-%: %.cu
-	$(NVCC) $(NVFLAGS) -o $@ $<
-
-# Clean up
 clean:
-	rm -f $(C_TARGETS) $(CU_TARGETS)
+	rm -f $(C_EXES) $(CXX_EXES) $(CU_EXES)
+
+# ------------------------------------------
+# Build Rules
+# ------------------------------------------
+
+# 1. C Rule: %_c depends on %.c
+# Example: nbody_c depends on nbody.c
+%_c: %.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+# 2. C++ Rule: %_cc depends on %.cc
+%_cc: %.cc
+	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
+
+# 3. CUDA Rule: %_cu depends on %.cu
+%_cu: %.cu
+	$(NVCC) $(NVFLAGS) -o $@ $< $(LDFLAGS)
