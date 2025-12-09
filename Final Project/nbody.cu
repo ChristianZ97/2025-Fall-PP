@@ -97,7 +97,6 @@ void step_leapfrog(Body *bodies, int N, double dt, double *ax, double *ay, doubl
     const int blocks_per_grid = (N + threads_per_block - 1) / threads_per_block;
     compute_acceleration<<<blocks_per_grid, threads_per_block>>>(device_bodies, N, device_ax, device_ay, device_az);
 
-    cudaMemcpy(bodies, device_bodies, N * sizeof(Body), cudaMemcpyDeviceToHost);
     cudaMemcpy(ax, device_ax, N * sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(ay, device_ay, N * sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(az, device_az, N * sizeof(double), cudaMemcpyDeviceToHost);
@@ -184,7 +183,6 @@ int main(int argc, char *argv[]) {
     const int blocks_per_grid = (N + threads_per_block - 1) / threads_per_block;
     compute_acceleration<<<blocks_per_grid, threads_per_block>>>(device_bodies, N, device_ax, device_ay, device_az);
 
-    cudaMemcpy(bodies, device_bodies, N * sizeof(Body), cudaMemcpyDeviceToHost);
     cudaMemcpy(ax_buf, device_ax, N * sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(ay_buf, device_ay, N * sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(az_buf, device_az, N * sizeof(double), cudaMemcpyDeviceToHost);
