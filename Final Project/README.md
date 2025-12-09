@@ -22,13 +22,13 @@ make
 # Run the simulation
 ```
 srun ./nbody_cpu <input_file> <output_trajectory_file>
-srun -N1 -n1 ./nbody_cpu input_<N>.txt traj_<N>.csv
+srun -N1 -n1 ./nbody_c input_<N>.txt traj_<N>.csv
 ```
 
 # Run the simulation on a GPU node
 ```
 srun ./nbody_gpu <input_file> <output_trajectory_file>
-srun -p nvidia -N1 -n1 --gres=gpu:1 ./nbody_gpu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
 
 ### Step 3: Verify Correctness
