@@ -1,63 +1,41 @@
 # N-Body Simulation (CPU & GPU)
-
 This project simulates the N-body problem using both a standard C implementation (CPU) and a CUDA implementation (GPU).
 
 ## How to Run
-
 Follow these steps to generate data, run simulations, and verify the results. In the examples, `<N>` is a placeholder for the number of bodies (e.g., 1000).
 
 ### Step 1: Generate Initial Conditions
-
 This script generates an input file with initial positions, velocities, and masses for `<N>` bodies.
-
 ```
-
 python gen_input.py <number_of_bodies> <output_filename>
-
 python gen_input.py <N> input_<N>.txt
-
 ```
 
-### Step 2: Compile and Run the CPU Simulation
+### Step 2: Compile and Run the Simulation
+First, compile the code. Then, run the simulation using `srun`.
 
-First, compile the C code. Then, run the simulation using `srun`.
-
-
-# Compile the C version (ground truth)
+# Compile the C version (ground truth) and CUDA version
+```
+make
+```
 
 # Run the simulation
-
 ```
 srun ./nbody_cpu <input_file> <output_trajectory_file>
 srun -N1 -n1 ./nbody_cpu input_<N>.txt traj_<N>.csv
 ```
 
-
-### Step 3: Compile and Run the GPU Simulation
-
-Compile the CUDA code. Then, run the simulation on a GPU-enabled node.
-
-# Compile the CUDA version
-
-```
-make
-```
-
-
 # Run the simulation on a GPU node
-
 ```
 srun ./nbody_gpu <input_file> <output_trajectory_file>
 srun -p nvidia -N1 -n1 --gres=gpu:1 ./nbody_gpu input_<N>.txt traj_<N>_cu.csv
 ```
 
-### Step 4: Verify Correctness
-
+### Step 3: Verify Correctness
 This Python script compares the CPU and GPU outputs to ensure they are numerically consistent within a given tolerance.
 
 **Option A (Recommended, using `uv`):**
 If you have `uv` installed, this command will automatically handle dependencies.
-
 ```
 uv run ... <cpu_output> <gpu_output>
 uv run --with pandas,numpy compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
@@ -65,22 +43,15 @@ uv run --with pandas,numpy compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
 
 **Option B (Using a Python virtual environment):**
 If you have `pandas` and `numpy` installed in your environment.
-
 ```
-
 python compare_nbody.py <cpu_output> <gpu_output>
-
 python compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
-
 ```
 
-### Step 5: Visualize the Results (Optional)
-
+### Step 4: Visualize the Results (Optional)
 To create an animation of the trajectory, first copy the output file (`traj_<N>.csv`) to your local machine.
-
 
 # Run the animation script locally
 ```
 python animate.py traj_<N>.csv result_<N>.gif
-
 ```
