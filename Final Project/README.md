@@ -14,7 +14,7 @@ python gen_input.py <N> input_<N>.txt
 ### Step 2: Compile and Run the Simulation
 First, compile the code. Then, run the simulation using `srun`.
 
-# Compile the C version (ground truth) and CUDA version
+# Compile the C version (ground truth) and the CUDA version
 ```
 make
 ```
