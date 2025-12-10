@@ -1,4 +1,4 @@
-// nbody_.cu
+// nbody_debug.cu
 
 #include <cuda.h>
 #include <math.h>
@@ -14,6 +14,18 @@
             exit(1);                                                                                    \
         }                                                                                               \
     } while (0)
+
+/* --- 除錯訊息印出 (只有定義 DEBUG 時啟用) --- */
+#ifdef DEBUG
+#define DEBUG_PRINT(fmt, ...)                           \
+    do {                                                \
+        fprintf(stderr, "[DEBUG] " fmt, ##__VA_ARGS__); \
+    } while (0)
+#else
+#define DEBUG_PRINT(fmt, ...) \
+    do {                      \
+    } while (0)
+#endif
 
 /* 單一質點 (Body) 的狀態 */
 typedef struct {
@@ -90,6 +102,13 @@ void step_leapfrog(Body *bodies, int N, double dt, double *ax, double *ay, doubl
 
     CUDA_CHECK(cudaMemcpy(device_bodies, bodies, N * sizeof(Body), cudaMemcpyHostToDevice));
 
+#ifdef DEBUG
+    // Optional: Peek first element to ensure copy correctness
+    Body host_peek;
+    CUDA_CHECK(cudaMemcpy(&host_peek, device_bodies, sizeof(Body), cudaMemcpyDeviceToHost));
+    DEBUG_PRINT("Step Leapfrog: Input Body[0].x = %.5f\n", host_peek.x);
+#endif
+
     const int threads_per_block = 256;
     const int blocks_per_grid = (N + threads_per_block - 1) / threads_per_block;
 
@@ -129,6 +148,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Error reading input.\n");
         return 1;
     }
+    DEBUG_PRINT("Input Read Success: N=%d, total_time=%.2f, dt=%.5f\n", N, total_time, dt);
 
     int steps = (int)(total_time / dt);
     if (steps <= 0) {
@@ -157,6 +177,7 @@ int main(int argc, char *argv[]) {
     double t = 0.0;
 
     /* --- 初始計算 Step 0 --- */
+    DEBUG_PRINT("Starting Initial Kernel Launch...\n");
     Body *device_bodies = NULL;
     double *device_ax = NULL, *device_ay = NULL, *device_az = NULL;
 
@@ -170,14 +191,18 @@ int main(int argc, char *argv[]) {
     const int threads_per_block = 256;
     const int blocks_per_grid = (N + threads_per_block - 1) / threads_per_block;
 
+    DEBUG_PRINT("Launching Kernel with Grid=(%d), Block=(%d)\n", blocks_per_grid, threads_per_block);
     compute_acceleration<<<blocks_per_grid, threads_per_block>>>(device_bodies, N, device_ax, device_ay, device_az);
 
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
+    DEBUG_PRINT("Kernel Finished & Synced.\n");
 
     CUDA_CHECK(cudaMemcpy(ax_buf, device_ax, N * sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(ay_buf, device_ay, N * sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(az_buf, device_az, N * sizeof(double), cudaMemcpyDeviceToHost));
+
+    DEBUG_PRINT("Initial Acceleration (First Body): ax=%.5f, ay=%.5f, az=%.5f\n", ax_buf[0], ay_buf[0], az_buf[0]);
 
     CUDA_CHECK(cudaFree(device_bodies));
     CUDA_CHECK(cudaFree(device_ax));
