@@ -17,6 +17,8 @@ First, compile the code. Then, run the simulation using `srun`.
 # Compile the C version (ground truth) and the CUDA version
 ```
 make
+make debug # for debug version
+make prof # for profiling version
 ```
 
 # Run the simulation
