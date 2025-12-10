@@ -14,20 +14,20 @@ python gen_input.py <N> input_<N>.txt
 ### Step 2: Compile and Run the Simulation
 First, compile the code. Then, run the simulation using `srun`.
 
-# Compile the C version (ground truth) and the CUDA version
+#### Compile the C version (ground truth) and the CUDA version
 ```
 make
 make debug # for debug version
 make prof # for profiling version
 ```
 
-# Run the simulation
+#### Run the simulation
 ```
 srun ./nbody_cpu <input_file> <output_trajectory_file>
 srun -N1 -n1 ./nbody_c input_<N>.txt traj_<N>.csv
 ```
 
-# Run the simulation on a GPU node
+#### Run the simulation on a GPU node
 ```
 srun ./nbody_gpu <input_file> <output_trajectory_file>
 srun -p nvidia -N1 -n1 --gres=gpu:1 ./nbody_cu input_<N>.txt traj_<N>_cu.csv
@@ -53,24 +53,22 @@ python compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
 ### Step 4: Visualize the Results (Optional)
 To create an animation of the trajectory, first copy the output file (`traj_<N>.csv`) to your local machine.
 
-# Run the animation script locally
+#### Run the animation script locally
 ```
 python animate.py traj_<N>.csv result_<N>.gif
 ```
 
 ### Step 5: Profile the Results (Optional)
 
-# Profile with Nsight Systems
+#### Profile with Nsight Systems
 ```
 srun -p nvidia -N1 -n1 --gres=gpu:1 nsys profile -o nbody_cu --stats=true ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
-
-# Profile with Nsight Compute (if supported)
+#### Profile with Nsight Compute (if supported)
 ```
 srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
-
-# Profile with nvprof
+##### Profile with nvprof
 ```
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof -o nbody_cu.nvvp ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
