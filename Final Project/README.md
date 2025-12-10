@@ -68,7 +68,7 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nsys profile -o nbody_cu --stats=true ./nbod
 ```
 srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
-##### Profile with nvprof
+#### Profile with nvprof
 ```
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof -o nbody_cu.nvvp ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 ```
