@@ -5,7 +5,7 @@ import os
 import argparse
 
 
-def compare_results(file_c, file_cu, tolerance=1e-4):
+def compare_results(file_c, file_cu, tolerance=1e-5):
     """
     Compares two N-body simulation output CSV files for numerical consistency.
     """
