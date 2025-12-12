@@ -96,19 +96,19 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
 
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
---kernels "compute_acceleration_kernel" \
---metrics sm_efficiency,warp_execution_efficiency \
-./nbody_cu ./testcases/c1_in.txt temp.csv
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
---kernels "compute_acceleration_kernel" \
---metrics gld_efficiency,gst_efficiency,shared_efficiency \
-./nbody_cu ./testcases/c1_in.txt temp.csv
+  --kernels "compute_acceleration_kernel" \
+  --metrics l2_tex_read_hit_rate,stall_memory_dependency,gld_efficiency \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
---kernels "compute_acceleration_kernel" \
---metrics flop_dp_efficiency \
-./nbody_cu ./testcases/c1_in.txt temp.csv
+  --kernels "compute_acceleration_kernel" \
+  --metrics flop_dp_efficiency,stall_exec_dependency \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
 ```
 #####
 
