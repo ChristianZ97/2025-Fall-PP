@@ -37,11 +37,13 @@ def run_tests():
         sys.exit(1)
 
     passed_count = 0
+    generated_csv_files = []
 
     for input_file in input_files:
         base_name = os.path.basename(input_file).replace("_in.txt", "")
         ground_truth_file = os.path.join(TEST_DIR, f"{base_name}_out.csv")
         user_output_file = f"{base_name}_run_out.csv"
+        generated_csv_files.append(user_output_file)
 
         cmd = SRUN_CMD + [EXECUTABLE, input_file, user_output_file]
 
@@ -76,6 +78,13 @@ def run_tests():
         print(f"{base_name:<8} {exec_time:>8.2f}s   {status}")
 
     print(f"\n{passed_count}/{len(input_files)} passed")
+
+    # Cleanup generated run csv files
+    for f in generated_csv_files:
+        try:
+            os.remove(f)
+        except FileNotFoundError:
+            pass
 
     if passed_count != len(input_files):
         sys.exit(1)
