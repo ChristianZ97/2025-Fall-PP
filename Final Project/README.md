@@ -81,8 +81,6 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_ker
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics ipc,eligible_warps_per_cycle,issue_slot_utilization   ./nbody_cu ./testcases/c1_in.txt temp.csv
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics achieved_occupancy,sm_efficiency,l2_tex_read_hit_rate,l2_tex_write_hit_rate   ./nbody_cu ./testcases/c1_in.txt temp.csv
-
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics inst_fp_64,inst_fp_32,inst_integer   ./nbody_cu ./testcases/c1_in.txt temp.csv
 ```
 #####
 
@@ -98,7 +96,3 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_ker
 - sm_efficiency: The percentage of time at least one warp is active on a specific multiprocessor
 - l2_tex_read_hit_rate: Hit rate at L2 cache for all read requests from texture cache
 - l2_tex_write_hit_rate: Hit Rate at L2 cache for all write requests from texture cache
-
-- inst_fp_64: Number of double-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
-- inst_fp_32: Number of single-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
-- inst_integer: Number of integer instructions executed by non-predicated threads
