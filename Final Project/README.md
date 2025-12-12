@@ -84,19 +84,32 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_ker
 ```
 #####
 
-*stall_exec_dependency:  Percentage of stalls occurring because an input required by the instruction is not yet available
-*stall_memory_dependency:  Percentage of stalls occurring because a memory operation cannot be performed due to the required resources not *being available or fully utilized, or because too many requests of a given type are outstanding
-*stall_sync:  Percentage of stalls occurring because the warp is blocked at a __syncthreads() call
+*stall_exec_dependency:
+  - Percentage of stalls occurring because an input required by the instruction is not yet available
+*stall_memory_dependency:
+  - Percentage of stalls occurring because a memory operation cannot be performed due to the required resources not being available or fully utilized, or because too many requests of a given type are outstanding
+*stall_sync:
+  - Percentage of stalls occurring because the warp is blocked at a __syncthreads() call
 
-*ipc:  Instructions executed per cycle
-*eligible_warps_per_cycle:  Average number of warps that are eligible to issue per active cycle
-*issue_slot_utilization:  Percentage of issue slots that issued at least one instruction, averaged across all cycles
+*ipc:
+  - Instructions executed per cycle
+*eligible_warps_per_cycle:
+  - Average number of warps that are eligible to issue per active cycle
+*issue_slot_utilization:
+  - Percentage of issue slots that issued at least one instruction, averaged across all cycles
 
-*achieved_occupancy:  Ratio of the average active warps per active cycle to the maximum number of warps supported on a multiprocessor
-*sm_efficiency:  The percentage of time at least one warp is active on a specific multiprocessor
-*l2_tex_read_hit_rate:  Hit rate at L2 cache for all read requests from texture cache
-*l2_tex_write_hit_rate:  Hit Rate at L2 cache for all write requests from texture cache
+*achieved_occupancy:
+  - Ratio of the average active warps per active cycle to the maximum number of warps supported on a multiprocessor
+*sm_efficiency:
+  - The percentage of time at least one warp is active on a specific multiprocessor
+*l2_tex_read_hit_rate:
+  - Hit rate at L2 cache for all read requests from texture cache
+*l2_tex_write_hit_rate:
+  - Hit Rate at L2 cache for all write requests from texture cache
 
-*inst_fp_64:  Number of double-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
-*inst_fp_32:  Number of single-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
-*inst_integer:  Number of integer instructions executed by non-predicated threads
+*inst_fp_64:
+   - Number of double-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
+*inst_fp_32:
+   - Number of single-precision floating-point instructions executed by non-predicated threads (arithmetic, compare, etc.)
+*inst_integer:
+   - Number of integer instructions executed by non-predicated threads
