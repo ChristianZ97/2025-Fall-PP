@@ -17,6 +17,18 @@ RESET = "\033[0m"
 
 
 def run_tests():
+    # Build before running tests
+    try:
+        subprocess.run(["make", "clean"], check=True)
+        subprocess.run(["make"], check=True)
+    except subprocess.CalledProcessError:
+        print("Error: build failed (make clean / make)")
+        sys.exit(1)
+
+    if not os.path.isfile(EXECUTABLE):
+        print(f"Error: Executable not found: {EXECUTABLE}")
+        sys.exit(1)
+
     input_files = glob.glob(os.path.join(TEST_DIR, "*_in.txt"))
     input_files.sort()
 

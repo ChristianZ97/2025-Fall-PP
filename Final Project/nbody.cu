@@ -1,4 +1,4 @@
-// nbody_v0.cu
+// nbody.cu
 
 #include <cuda.h>
 #include <math.h>
@@ -28,17 +28,14 @@ int read_input(const char *filename, int *N, double *total_time, double *dt, int
 FILE *init_traj_file(const char *filename);
 void dump_traj_step(FILE *ftraj, int step, double t, int N, const Body *bodies);
 
-__global__ void compute_acceleration_kernel(const Body *d_bodies, int N, double *d_ax, double *d_ay, double *d_az);
-void step_leapfrog(Body *h_bodies, int N, double dt, double *ax, double *ay, double *az);
+__global__ void compute_acceleration_kernel(const Body *d_bodies, const int N, double *d_ax, double *d_ay, double *d_az) {
 
-
-__global__ void compute_acceleration_kernel(const Body *d_bodies, int N, double *d_ax, double *d_ay, double *d_az) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
 
-    double xi = d_bodies[i].x;
-    double yi = d_bodies[i].y;
-    double zi = d_bodies[i].z;
+    const double xi = d_bodies[i].x;
+    const double yi = d_bodies[i].y;
+    const double zi = d_bodies[i].z;
 
     double axi = 0.0;
     double ayi = 0.0;
@@ -47,14 +44,14 @@ __global__ void compute_acceleration_kernel(const Body *d_bodies, int N, double 
     for (int j = 0; j < N; ++j) {
         if (j == i) continue;
 
-        double dx = d_bodies[j].x - xi;
-        double dy = d_bodies[j].y - yi;
-        double dz = d_bodies[j].z - zi;
+        const double dx = d_bodies[j].x - xi;
+        const double dy = d_bodies[j].y - yi;
+        const double dz = d_bodies[j].z - zi;
 
-        double distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
-        double invDist = 1.0 / sqrt(distSqr);
-        double invDist3 = invDist * invDist * invDist;
-        double force = G * d_bodies[j].m * invDist3;
+        const double distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
+        const double invDist = 1.0 / sqrt(distSqr);
+        const double invDist3 = invDist * invDist * invDist;
+        const double force = G * d_bodies[j].m * invDist3;
 
         axi += dx * force;
         ayi += dy * force;
@@ -66,8 +63,7 @@ __global__ void compute_acceleration_kernel(const Body *d_bodies, int N, double 
     d_az[i] = azi;
 }
 
-
-void step_leapfrog(Body *h_bodies, int N, double dt, double *ax, double *ay, double *az) {
+void step_leapfrog(Body *h_bodies, const int N, const double dt, double *ax, double *ay, double *az) {
     /* 1) v(t+1/2) = v(t) + 0.5 * a(t) * dt */
     for (int i = 0; i < N; ++i) {
         h_bodies[i].vx += 0.5 * ax[i] * dt;
@@ -88,15 +84,15 @@ void step_leapfrog(Body *h_bodies, int N, double dt, double *ax, double *ay, dou
     double *d_ay = NULL;
     double *d_az = NULL;
 
-    CUDA_CHECK(cudaMalloc((void **)&d_bodies, N * sizeof(Body)));
-    CUDA_CHECK(cudaMalloc((void **)&d_ax, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc((void **)&d_ay, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc((void **)&d_az, N * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_bodies, N * sizeof(Body)));
+    CUDA_CHECK(cudaMalloc(&d_ax, N * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_ay, N * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_az, N * sizeof(double)));
 
     CUDA_CHECK(cudaMemcpy(d_bodies, h_bodies, N * sizeof(Body), cudaMemcpyHostToDevice));
 
-    int blockSize = 256;
-    int gridSize = (N + blockSize - 1) / blockSize;
+    const int blockSize = 256;
+    const int gridSize = (N + blockSize - 1) / blockSize;
 
     compute_acceleration_kernel<<<gridSize, blockSize>>>(d_bodies, N, d_ax, d_ay, d_az);
     CUDA_CHECK(cudaGetLastError());
@@ -119,13 +115,6 @@ void step_leapfrog(Body *h_bodies, int N, double dt, double *ax, double *ay, dou
     }
 }
 
-
-
-
-/* -------------------------------------------------------- */
-/* Main Function */
-/* -------------------------------------------------------- */
-
 int main(int argc, char **argv) {
 
     clock_t start = clock();
@@ -138,23 +127,20 @@ int main(int argc, char **argv) {
     int dump_interval = 0;
     double total_time = 0.0;
     double dt = 0.0;
-
     Body *h_bodies = NULL;
 
-    /* 1. 讀取輸入資料 */
     if (!read_input(argv[1], &N, &total_time, &dt, &dump_interval, &h_bodies)) {
         fprintf(stderr, "Error reading input.\n");
         return 1;
     }
 
-    int steps = (int)(total_time / dt);
+    const int steps = (int)(total_time / dt);
     if (steps <= 0) {
         fprintf(stderr, "Error: total_time / dt <= 0\n");
         free(h_bodies);
         return 1;
     }
 
-    /* 2. 分配 CPU 端加速度緩衝區 */
     double *ax = (double *)malloc(N * sizeof(double));
     double *ay = (double *)malloc(N * sizeof(double));
     double *az = (double *)malloc(N * sizeof(double));
@@ -167,7 +153,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* 3. 開啟輸出檔案 */
     FILE *ftraj = init_traj_file(argv[2]);
     if (!ftraj) {
         free(h_bodies);
@@ -177,52 +162,42 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("Running simulation (v0 logic, v1 style): N=%d, steps=%d, dump_interval=%d\n", N, steps, dump_interval);
+    // printf("Running simulation (v0 logic, v1 style): N=%d, steps=%d, dump_interval=%d\n", N, steps, dump_interval);
 
     double t = 0.0;
+    Body *d_bodies = NULL;
+    double *d_ax = NULL;
+    double *d_ay = NULL;
+    double *d_az = NULL;
 
-    /* --- 初始計算 Step 0：在 GPU 上算 a(t=0) --- */
-    {
-        Body *d_bodies = NULL;
-        double *d_ax = NULL;
-        double *d_ay = NULL;
-        double *d_az = NULL;
+    CUDA_CHECK(cudaMalloc(&d_bodies, N * sizeof(Body)));
+    CUDA_CHECK(cudaMalloc(&d_ax, N * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_ay, N * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_az, N * sizeof(double)));
 
-        CUDA_CHECK(cudaMalloc((void **)&d_bodies, N * sizeof(Body)));
-        CUDA_CHECK(cudaMalloc((void **)&d_ax, N * sizeof(double)));
-        CUDA_CHECK(cudaMalloc((void **)&d_ay, N * sizeof(double)));
-        CUDA_CHECK(cudaMalloc((void **)&d_az, N * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_bodies, h_bodies, N * sizeof(Body), cudaMemcpyHostToDevice));
 
-        CUDA_CHECK(cudaMemcpy(d_bodies, h_bodies, N * sizeof(Body), cudaMemcpyHostToDevice));
+    const int blockSize = 256;
+    const int gridSize = (N + blockSize - 1) / blockSize;
 
-        int blockSize = 256;
-        int gridSize = (N + blockSize - 1) / blockSize;
+    compute_acceleration_kernel<<<gridSize, blockSize>>>(d_bodies, N, d_ax, d_ay, d_az);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
-        compute_acceleration_kernel<<<gridSize, blockSize>>>(d_bodies, N, d_ax, d_ay, d_az);
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemcpy(ax, d_ax, N * sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(ay, d_ay, N * sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(az, d_az, N * sizeof(double), cudaMemcpyDeviceToHost));
 
-        CUDA_CHECK(cudaMemcpy(ax, d_ax, N * sizeof(double), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(ay, d_ay, N * sizeof(double), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(az, d_az, N * sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaFree(d_bodies));
+    CUDA_CHECK(cudaFree(d_ax));
+    CUDA_CHECK(cudaFree(d_ay));
+    CUDA_CHECK(cudaFree(d_az));
 
-        CUDA_CHECK(cudaFree(d_bodies));
-        CUDA_CHECK(cudaFree(d_ax));
-        CUDA_CHECK(cudaFree(d_ay));
-        CUDA_CHECK(cudaFree(d_az));
-    }
-
-    /* 輸出 Step 0 軌跡 */
     dump_traj_step(ftraj, 0, t, N, h_bodies);
-
-    /* --- 主時間迴圈 (沿用 v0: 每步在 CPU 做 leapfrog，內部呼叫 GPU 算 a) --- */
     for (int s = 1; s <= steps; ++s) {
         step_leapfrog(h_bodies, N, dt, ax, ay, az);
         t += dt;
-
-        if (s % dump_interval == 0) {
-            dump_traj_step(ftraj, s, t, N, h_bodies);
-        }
+        if (s % dump_interval == 0) dump_traj_step(ftraj, s, t, N, h_bodies);
     }
 
     fclose(ftraj);
@@ -237,7 +212,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "ELAPSED_TIME: %.6f\n", elapsed);
     return 0;
 }
-
 
 int read_input(const char *filename, int *N, double *total_time, double *dt, int *dump_interval, Body **bodies_out) {
     FILE *fin = fopen(filename, "r");
