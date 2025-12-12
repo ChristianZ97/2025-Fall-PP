@@ -74,13 +74,25 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof
 --query-metrics # check all metrics
 --csv --log-file <output>.csv # store the profiled results
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --kernels "<your kernel function>" --metrics <metric1>,<metric2>,<metric3> <executable> <input> <output>
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+--kernels "<your kernel function>" \
+--metrics <metric1>,<metric2>,<metric3> \
+<executable> <input> <output>
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics stall_exec_dependency,stall_memory_dependency,stall_sync   ./nbody_cu ./testcases/c1_in.txt temp.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+--kernels "compute_acceleration_kernel" \
+--metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+./nbody_cu ./testcases/c1_in.txt temp.csv
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics ipc,eligible_warps_per_cycle,issue_slot_utilization   ./nbody_cu ./testcases/c1_in.txt temp.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+--kernels "compute_acceleration_kernel" \
+--metrics ipc,eligible_warps_per_cycle,issue_slot_utilization \
+./nbody_cu ./testcases/c1_in.txt temp.csv
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof   --kernels "compute_acceleration_kernel"   --metrics achieved_occupancy,sm_efficiency,l2_tex_read_hit_rate,l2_tex_write_hit_rate   ./nbody_cu ./testcases/c1_in.txt temp.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+--kernels "compute_acceleration_kernel" \
+--metrics achieved_occupancy,sm_efficiency,l2_tex_read_hit_rate,l2_tex_write_hit_rate \
+./nbody_cu ./testcases/c1_in.txt temp.csv
 ```
 #####
 
