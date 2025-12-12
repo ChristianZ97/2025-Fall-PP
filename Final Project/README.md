@@ -70,6 +70,8 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu input_
 ```
 #### Profile with nvprof
 ```
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --query-metrics # all metrics
+
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof -o nbody_cu.nvvp ./nbody_cu input_<N>.txt traj_<N>_cu.csv
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof ./nbody_cu input_<N>.txt traj_<N>_cu.csv
