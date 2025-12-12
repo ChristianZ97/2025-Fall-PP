@@ -52,7 +52,7 @@ __global__ void compute_acceleration_kernel(const Body *d_bodies, int N, double 
         double dz = d_bodies[j].z - zi;
 
         double distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
-        double invDist = 1.0 / rsqrt(distSqr);
+        double invDist = 1.0 / sqrt(distSqr);
         double invDist3 = invDist * invDist * invDist;
         double force = G * d_bodies[j].m * invDist3;
 

@@ -9,7 +9,7 @@ NVCC   = nvcc
 
 # Base Flags (Optimization & Architecture)
 CFLAGS_BASE   = -Wall -g
-NVFLAGS_BASE  = -std=c++11 -O3 -Xptxas="-v" -arch=sm_61
+NVFLAGS_BASE  = -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false
 LDFLAGS       = -lm
 
 # Variant Flags

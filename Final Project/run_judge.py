@@ -45,7 +45,10 @@ def run_tests():
             continue
 
         compare_cmd = [
-            "uv", "run", "--with", "pandas,numpy",
+            "uv",
+            "run",
+            "--with",
+            "pandas,numpy",
             COMPARE_SCRIPT,
             ground_truth_file,
             user_output_file,

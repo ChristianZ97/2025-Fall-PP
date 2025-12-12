@@ -100,13 +100,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "file_c",
         nargs="?",
-        default="traj_10.csv",
+        default="ground_truth.csv",
         help="Path to the base CSV file (e.g., C output)",
     )
     parser.add_argument(
         "file_cu",
         nargs="?",
-        default="traj_10_cu.csv",
+        default="test_output.csv",
         help="Path to the comparison CSV file (e.g., CUDA output)",
     )
 
