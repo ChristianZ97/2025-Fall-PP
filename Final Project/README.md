@@ -102,7 +102,7 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
   --kernels "compute_acceleration_kernel" \
-  --metrics l2_tex_read_hit_rate,stall_memory_dependency,gld_efficiency \
+  --metrics l2_tex_read_hit_rate,stall_memory_dependency,gld_efficiency,gst_efficiency \
   ./nbody_cu ./testcases/c1_in.txt temp.csv
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
