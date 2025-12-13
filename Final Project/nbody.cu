@@ -114,7 +114,8 @@ __global__ void compute_acceleration_kernel(const double *__restrict__ px,
                     const double dy = jy - yi[k];
                     const double dz = jz - zi[k];
                     const double distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
-                    const double invDist = 1.0 / sqrt(distSqr);  // const double invDist = rsqrt((double)distSqr);
+                    const double invDist = 1.0 / sqrt(distSqr);
+                    // const double invDist = rsqrt((double)distSqr);
                     const double invDist3 = invDist * invDist * invDist;
                     const double force = G * jm * invDist3;
 

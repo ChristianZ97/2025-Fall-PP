@@ -1,0 +1,245 @@
+pp25s057@apollo-login:~/final_project$ ls
+animate.py  compare_nbody.py  flin_code  gen_input.py  kris_code  Makefile  nbody.c  nbody.cu  nbody.hip  README.md  run_judge_amd.py  run_judge.py  testcases
+pp25s057@apollo-login:~/final_project$ cd flin_code/
+pp25s057@apollo-login:~/final_project/flin_code$ ls
+nbody_flin_v0_naive.cu  nbody_flin_v1_share.cu  nbody_flin_v2_d2d.cu  nbody_flin_v3_soa.cu
+pp25s057@apollo-login:~/final_project/flin_code$ cd ..
+pp25s057@apollo-login:~/final_project$ cp ./flin_code/nbody_flin_v0_naive.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z20update_phase2_kernelP4BodyidPKdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z20update_phase2_kernelP4BodyidPKdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 16 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z20update_phase1_kernelP4BodyidPKdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z20update_phase1_kernelP4BodyidPKdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 20 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 44 registers, used 0 barriers, 360 bytes cmem[0], 36 bytes cmem[2]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.49s   accepted
+c2          11.05s   accepted
+c3          38.52s   accepted
+c4         147.48s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./flin_code/nbody_flin_v1_share.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z20update_phase2_kernelP4BodyidPKdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z20update_phase2_kernelP4BodyidPKdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 24 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z20update_phase1_kernelP4BodyidPKdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z20update_phase1_kernelP4BodyidPKdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 26 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 46 registers, used 1 barriers, 14336 bytes smem, 360 bytes cmem[0], 36 bytes cmem[2]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.92s   accepted
+c2          11.42s   accepted
+c3          40.29s   accepted
+c4         151.84s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./flin_code/nbody_flin_v2_d2d.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_initial_acc_soaiPKdS0_S0_S0_PdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_initial_acc_soaiPKdS0_S0_S0_PdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 54 registers, used 1 barriers, 8192 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z18leapfrog_step2_soaidPKdS0_S0_S0_PdS1_S1_S1_S1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z18leapfrog_step2_soaidPKdS0_S0_S0_PdS1_S1_S1_S1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 60 registers, used 1 barriers, 8192 bytes smem, 416 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z18leapfrog_step1_soaidPdS_S_S_S_S_PKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z18leapfrog_step1_soaidPdS_S_S_S_S_PKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.88s   accepted
+c2          11.27s   accepted
+c3          40.42s   accepted
+c4         152.64s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./flin_code/nbody_flin_v3_soa.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_initial_acc_soaiPKdS0_S0_S0_PdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_initial_acc_soaiPKdS0_S0_S0_PdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 54 registers, used 1 barriers, 8192 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z18leapfrog_step2_soaidPKdS0_S0_S0_PdS1_S1_S1_S1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z18leapfrog_step2_soaidPKdS0_S0_S0_PdS1_S1_S1_S1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 54 registers, used 1 barriers, 8192 bytes smem, 416 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z18leapfrog_step1_soaidPdS_S_S_S_S_PKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z18leapfrog_step1_soaidPdS_S_S_S_S_PKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.96s   accepted
+c2          11.42s   accepted
+c3          40.69s   accepted
+c4         152.41s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cd kris_code/
+pp25s057@apollo-login:~/final_project/kris_code$ ls
+nbody_v0_baseline.cu  nbody_v1_sm.cu  nbody_v2_soa.cu  nbody_v3_bf64.cu
+pp25s057@apollo-login:~/final_project/kris_code$ cd ..
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v0_baseline.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 44 registers, used 0 barriers, 360 bytes cmem[0], 36 bytes cmem[2]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.96s   accepted
+c2          11.67s   accepted
+c3          39.71s   accepted
+c4         150.09s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v1_sm.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelP4BodyidPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelP4BodyidPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 16 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 52 registers, used 1 barriers, 14336 bytes smem, 360 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelP4BodyidPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelP4BodyidPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 20 registers, used 0 barriers, 368 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           6.01s   accepted
+c2          11.39s   accepted
+c3          40.47s   accepted
+c4         151.81s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v2_soa.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelPdS_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelPdS_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 8192 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           5.93s   accepted
+c2          11.36s   accepted
+c3          40.27s   accepted
+c4         152.28s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v3_bf64.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ python run_judge.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelPdS_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelPdS_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 2048 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           4.05s   accepted
+c2          10.96s   accepted
+c3          39.41s   accepted
+c4         133.24s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ python run_judge_amd.py 
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelPdS_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelPdS_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 2048 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+c1           4.82s   accepted
+c2           8.77s   accepted
+c3          16.74s   accepted
+c4          32.93s   accepted
+
+4/4 passed
+pp25s057@apollo-login:~/final_project$ 

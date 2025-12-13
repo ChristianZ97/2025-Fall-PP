@@ -1,0 +1,277 @@
+pp25s057@apollo-login:~/final_project$ make clean
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v0_baseline.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ make
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 44 registers, used 0 barriers, 360 bytes cmem[0], 36 bytes cmem[2]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency,issue_slot_utilization \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==2222686== NVPROF is profiling process 2222686, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+ELAPSED_TIME: 36.388199
+==2222686== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==2222686== Profiling result:
+==2222686== Metric result:
+Invocations                               Metric Name                        Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                        achieved_occupancy                        Achieved Occupancy    0.116663    0.116989    0.116879
+       2001                             sm_efficiency                   Multiprocessor Activity      42.33%      43.04%      42.78%
+       2001                 warp_execution_efficiency                 Warp Execution Efficiency      96.87%      96.87%      96.87%
+       2001                    issue_slot_utilization                    Issue Slot Utilization       4.65%       4.69%       4.67%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167754== NVPROF is profiling process 3167754, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167754== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 113.848193
+==3167754== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167754== Profiling result:
+==3167754== Metric result:
+Invocations                               Metric Name                           Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                     stall_exec_dependency   Issue Stall Reasons (Execution Dependency)      84.40%      84.50%      84.45%
+       2001                   stall_memory_dependency           Issue Stall Reasons (Data Request)      12.97%      13.06%      13.02%
+       2001                                stall_sync        Issue Stall Reasons (Synchronization)       0.00%       0.00%       0.00%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_load_transactions_per_request,shared_store_transactions_per_request \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167795== NVPROF is profiling process 3167795, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167795== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 243.958801
+==3167795== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167795== Profiling result:
+==3167795== Metric result:
+Invocations                               Metric Name                             Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                            gld_efficiency                  Global Memory Load Efficiency      25.00%      25.00%      25.00%
+       2001                            gst_efficiency                 Global Memory Store Efficiency      99.85%      99.85%      99.85%
+       2001      shared_load_transactions_per_request    Shared Memory Load Transactions Per Request    0.000000    0.000000    0.000000
+       2001     shared_store_transactions_per_request   Shared Memory Store Transactions Per Request    0.000000    0.000000    0.000000
+pp25s057@apollo-login:~/final_project$ make clean
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v1_sm.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ make
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelP4BodyidPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelP4BodyidPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 16 registers, used 0 barriers, 368 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPK4BodyiPdS2_S2_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPK4BodyiPdS2_S2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 52 registers, used 1 barriers, 14336 bytes smem, 360 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelP4BodyidPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelP4BodyidPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 20 registers, used 0 barriers, 368 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency,issue_slot_utilization \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167977== NVPROF is profiling process 3167977, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+ELAPSED_TIME: 36.743515
+==3167977== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3167977== Profiling result:
+==3167977== Metric result:
+Invocations                               Metric Name                        Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                        achieved_occupancy                        Achieved Occupancy    0.124998    0.124999    0.124999
+       2001                             sm_efficiency                   Multiprocessor Activity      42.31%      42.49%      42.39%
+       2001                 warp_execution_efficiency                 Warp Execution Efficiency      98.51%      98.51%      98.51%
+       2001                    issue_slot_utilization                    Issue Slot Utilization       4.33%       4.33%       4.33%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168018== NVPROF is profiling process 3168018, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168018== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 116.138362
+==3168018== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168018== Profiling result:
+==3168018== Metric result:
+Invocations                               Metric Name                           Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                     stall_exec_dependency   Issue Stall Reasons (Execution Dependency)      92.38%      92.39%      92.38%
+       2001                   stall_memory_dependency           Issue Stall Reasons (Data Request)       0.18%       0.18%       0.18%
+       2001                                stall_sync        Issue Stall Reasons (Synchronization)       5.63%       5.64%       5.63%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_load_transactions_per_request,shared_store_transactions_per_request \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==2223624== NVPROF is profiling process 2223624, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==2223624== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 157.283084
+==2223624== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==2223624== Profiling result:
+==2223624== Metric result:
+Invocations                               Metric Name                             Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(Body const *, int, double*, double*, double*)
+       2001                            gld_efficiency                  Global Memory Load Efficiency      25.00%      25.00%      25.00%
+       2001                            gst_efficiency                 Global Memory Store Efficiency     100.00%     100.00%     100.00%
+       2001      shared_load_transactions_per_request    Shared Memory Load Transactions Per Request    1.600000    1.600000    1.600000
+       2001     shared_store_transactions_per_request   Shared Memory Store Transactions Per Request    1.433628    1.433628    1.433628
+pp25s057@apollo-login:~/final_project$ make clean
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v2_soa.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ make
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelPdS_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelPdS_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 8192 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency,issue_slot_utilization \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168236== NVPROF is profiling process 3168236, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+ELAPSED_TIME: 36.345057
+==3168236== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168236== Profiling result:
+==3168236== Metric result:
+Invocations                               Metric Name                        Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                        achieved_occupancy                        Achieved Occupancy    0.124998    0.124999    0.124998
+       2001                             sm_efficiency                   Multiprocessor Activity      42.77%      43.03%      42.98%
+       2001                 warp_execution_efficiency                 Warp Execution Efficiency      98.51%      98.51%      98.51%
+       2001                    issue_slot_utilization                    Issue Slot Utilization       4.58%       4.58%       4.58%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168274== NVPROF is profiling process 3168274, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168274== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 116.429803
+==3168274== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168274== Profiling result:
+==3168274== Metric result:
+Invocations                               Metric Name                           Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                     stall_exec_dependency   Issue Stall Reasons (Execution Dependency)      91.76%      91.78%      91.77%
+       2001                   stall_memory_dependency           Issue Stall Reasons (Data Request)       0.05%       0.06%       0.05%
+       2001                                stall_sync        Issue Stall Reasons (Synchronization)       6.07%       6.08%       6.07%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_load_transactions_per_request,shared_store_transactions_per_request \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168315== NVPROF is profiling process 3168315, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168315== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 160.728337
+==3168315== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168315== Profiling result:
+==3168315== Metric result:
+Invocations                               Metric Name                             Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                            gld_efficiency                  Global Memory Load Efficiency      99.85%      99.85%      99.85%
+       2001                            gst_efficiency                 Global Memory Store Efficiency      99.85%      99.85%      99.85%
+       2001      shared_load_transactions_per_request    Shared Memory Load Transactions Per Request    1.000000    1.000000    1.000000
+       2001     shared_store_transactions_per_request   Shared Memory Store Transactions Per Request    1.204969    1.204969    1.204969
+pp25s057@apollo-login:~/final_project$ make clean
+rm -f nbody_c nbody_cu nbody_hip nbody_c_debug nbody_cu_debug nbody_hip_debug nbody_c_prof nbody_cu_prof nbody_hip_prof
+Clean complete.
+pp25s057@apollo-login:~/final_project$ cp ./kris_code/nbody_v3_bf64.cu nbody.cu
+pp25s057@apollo-login:~/final_project$ make
+gcc -Wall -g -o nbody_c nbody.c -lm
+nvcc -std=c++11 -O2 -Xptxas="-v" -arch=sm_61 -fmad=false -o nbody_cu nbody.cu -lm
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z23compute_velocity_kernelPdS_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z23compute_velocity_kernelPdS_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z27compute_acceleration_kernelPKdS0_S0_S0_iPdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 2048 bytes smem, 384 bytes cmem[0], 36 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_' for 'sm_61'
+ptxas info    : Function properties for _Z32compute_velocity_position_kernelPdS_S_S_S_S_idPKdS1_S1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 408 bytes cmem[0]
+hipcc -std=c++14 -O2 --offload-arch=gfx908 -ffp-contract=off -o nbody_hip nbody.hip -lm
+Build complete (Standard: C/CUDA/HIP).
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency,issue_slot_utilization \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168393== NVPROF is profiling process 3168393, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+ELAPSED_TIME: 34.281391
+==3168393== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168393== Profiling result:
+==3168393== Metric result:
+Invocations                               Metric Name                        Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                        achieved_occupancy                        Achieved Occupancy    0.051411    0.051415    0.051413
+       2001                             sm_efficiency                   Multiprocessor Activity      99.16%      99.60%      99.47%
+       2001                 warp_execution_efficiency                 Warp Execution Efficiency      98.52%      98.52%      98.52%
+       2001                    issue_slot_utilization                    Issue Slot Utilization       2.97%       2.98%       2.97%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168469== NVPROF is profiling process 3168469, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168469== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 103.830411
+==3168469== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168469== Profiling result:
+==3168469== Metric result:
+Invocations                               Metric Name                           Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                     stall_exec_dependency   Issue Stall Reasons (Execution Dependency)      94.96%      95.45%      95.20%
+       2001                   stall_memory_dependency           Issue Stall Reasons (Data Request)       0.24%       0.29%       0.27%
+       2001                                stall_sync        Issue Stall Reasons (Synchronization)       1.54%       1.87%       1.69%
+pp25s057@apollo-login:~/final_project$ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_load_transactions_per_request,shared_store_transactions_per_request \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168509== NVPROF is profiling process 3168509, command: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168509== Some kernel(s) will be replayed on device 0 in order to collect all events/metrics.
+ELAPSED_TIME: 141.676715
+==3168509== Profiling application: ./nbody_cu ./testcases/c1_in.txt temp.csv
+==3168509== Profiling result:
+==3168509== Metric result:
+Invocations                               Metric Name                             Metric Description         Min         Max         Avg
+Device "NVIDIA GeForce GTX 1080 (0)"
+    Kernel: compute_acceleration_kernel(double const *, double const *, double const *, double const *, int, double*, double*, double*)
+       2001                            gld_efficiency                  Global Memory Load Efficiency      99.85%      99.85%      99.85%
+       2001                            gst_efficiency                 Global Memory Store Efficiency      99.85%      99.85%      99.85%
+       2001      shared_load_transactions_per_request    Shared Memory Load Transactions Per Request    1.000000    1.000000    1.000000
+       2001     shared_store_transactions_per_request   Shared Memory Store Transactions Per Request    1.163399    1.163399    1.163399
+pp25s057@apollo-login:~/final_project$ 
