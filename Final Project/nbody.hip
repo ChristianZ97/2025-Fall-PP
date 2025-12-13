@@ -1,18 +1,18 @@
-// nbody.cu
+// nbody.hip
 
-#include <cuda.h>
+#include <hip/hip_runtime.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
-#define CUDA_CHECK(call)                                                                                \
-    do {                                                                                                \
-        cudaError_t err = (call);                                                                       \
-        if (err != cudaSuccess) {                                                                       \
-            fprintf(stderr, "CUDA Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
-            exit(1);                                                                                    \
-        }                                                                                               \
+#define HIP_CHECK(call)                                                                               \
+    do {                                                                                              \
+        hipError_t err = (call);                                                                      \
+        if (err != hipSuccess) {                                                                      \
+            fprintf(stderr, "HIP Error at %s:%d - %s\n", __FILE__, __LINE__, hipGetErrorString(err)); \
+            exit(1);                                                                                  \
+        }                                                                                             \
     } while (0)
 
 typedef struct {
@@ -157,7 +157,7 @@ void step_leapfrog(const int N, const double dt, double *d_x, double *d_y, doubl
     /* 2) x(t+1) = x(t) + v(t+1/2) * dt */
 
     compute_velocity_position_kernel<<<gridSize, blockSize>>>(d_x, d_y, d_z, d_vx, d_vy, d_vz, N, dt, d_ax, d_ay, d_az);
-    CUDA_CHECK(cudaGetLastError());
+    HIP_CHECK(hipGetLastError());
 
     /* 3) GPU 計算 a(t+1) */
     const int bodies_per_thread = ILP;
@@ -166,12 +166,12 @@ void step_leapfrog(const int N, const double dt, double *d_x, double *d_y, doubl
     const int acc_gridSize = (total_threads + blockSize - 1) / blockSize;
 
     compute_acceleration_kernel<<<acc_gridSize, blockSize>>>(d_x, d_y, d_z, d_m, N, d_ax, d_ay, d_az);
-    CUDA_CHECK(cudaGetLastError());
+    HIP_CHECK(hipGetLastError());
 
     /* 4) v(t+1) = v(t+1/2) + 0.5 * a(t+1) * dt */
 
     compute_velocity_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_vz, N, dt, d_ax, d_ay, d_az);
-    CUDA_CHECK(cudaGetLastError());
+    HIP_CHECK(hipGetLastError());
 }
 
 int main(int argc, char **argv) {
@@ -226,31 +226,31 @@ int main(int argc, char **argv) {
     double *d_m;
     double *d_ax, *d_ay, *d_az;
 
-    CUDA_CHECK(cudaMalloc(&d_x, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_y, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_z, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_vx, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_vy, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_vz, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_m, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_ax, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_ay, N * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_az, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_x, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_y, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_z, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_vx, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_vy, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_vz, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_m, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_ax, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_ay, N * sizeof(double)));
+    HIP_CHECK(hipMalloc(&d_az, N * sizeof(double)));
 
-    CUDA_CHECK(cudaMemcpy(d_x, h_soa.x, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_y, h_soa.y, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_z, h_soa.z, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_vx, h_soa.vx, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_vy, h_soa.vy, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_vz, h_soa.vz, N * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_m, h_soa.m, N * sizeof(double), cudaMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_x, h_soa.x, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_y, h_soa.y, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_z, h_soa.z, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_vx, h_soa.vx, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_vy, h_soa.vy, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_vz, h_soa.vz, N * sizeof(double), hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(d_m, h_soa.m, N * sizeof(double), hipMemcpyHostToDevice));
 
     const int bodies_per_thread = ILP;
     const int total_threads = (N + bodies_per_thread - 1) / bodies_per_thread;
     const int threads_per_block = SM_SIZE;
     const int blocks_per_grid = (total_threads + threads_per_block - 1) / threads_per_block;
     compute_acceleration_kernel<<<blocks_per_grid, threads_per_block>>>(d_x, d_y, d_z, d_m, N, d_ax, d_ay, d_az);
-    CUDA_CHECK(cudaGetLastError());
+    HIP_CHECK(hipGetLastError());
 
     dump_traj_step(ftraj, 0, t, N, &h_soa);
 
@@ -262,28 +262,28 @@ int main(int argc, char **argv) {
 
         if (s % dump_interval == 0) {
 
-            CUDA_CHECK(cudaMemcpy(h_soa.x, d_x, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.y, d_y, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.z, d_z, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.vx, d_vx, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.vy, d_vy, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.vz, d_vz, N * sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_soa.m, d_m, N * sizeof(double), cudaMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.x, d_x, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.y, d_y, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.z, d_z, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.vx, d_vx, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.vy, d_vy, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.vz, d_vz, N * sizeof(double), hipMemcpyDeviceToHost));
+            HIP_CHECK(hipMemcpy(h_soa.m, d_m, N * sizeof(double), hipMemcpyDeviceToHost));
 
             dump_traj_step(ftraj, s, t, N, &h_soa);
         }
     }
 
-    CUDA_CHECK(cudaFree(d_x));
-    CUDA_CHECK(cudaFree(d_y));
-    CUDA_CHECK(cudaFree(d_z));
-    CUDA_CHECK(cudaFree(d_vx));
-    CUDA_CHECK(cudaFree(d_vy));
-    CUDA_CHECK(cudaFree(d_vz));
-    CUDA_CHECK(cudaFree(d_m));
-    CUDA_CHECK(cudaFree(d_ax));
-    CUDA_CHECK(cudaFree(d_ay));
-    CUDA_CHECK(cudaFree(d_az));
+    HIP_CHECK(hipFree(d_x));
+    HIP_CHECK(hipFree(d_y));
+    HIP_CHECK(hipFree(d_z));
+    HIP_CHECK(hipFree(d_vx));
+    HIP_CHECK(hipFree(d_vy));
+    HIP_CHECK(hipFree(d_vz));
+    HIP_CHECK(hipFree(d_m));
+    HIP_CHECK(hipFree(d_ax));
+    HIP_CHECK(hipFree(d_ay));
+    HIP_CHECK(hipFree(d_az));
 
     fclose(ftraj);
     free(h_soa.x);

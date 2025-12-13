@@ -70,11 +70,41 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu input_
 ```
 #### Profile with nvprof
 ```
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof -o nbody_cu.nvvp ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof
+--query-metrics # check all metrics
+--csv --log-file <output>.csv # store the profiled results
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof ./nbody_cu input_<N>.txt traj_<N>_cu.csv
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --csv --log-file profile.csv ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+--kernels "<your kernel function>" \
+--metrics <metric1>,<metric2>,<metric3> \
+<executable> <input> <output>
 
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --metrics achieved_occupancy,sm_efficiency,gld_throughput,gst_throughput,shared_load_throughput,shared_store_throughput ./nbody_cu input_<N>.txt traj_<N>_cu.csv
-srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof --metrics achieved_occupancy,sm_efficiency,gld_throughput,gst_throughput,shared_load_throughput,shared_store_throughput --csv --log-file profile.csv ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics achieved_occupancy,sm_efficiency,warp_execution_efficiency,issue_slot_utilization \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_load_transactions_per_request,shared_store_transactions_per_request \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
 ```
+
+
+- achieved_occupancy: Ratio of the average active warps per active cycle to the maximum number of warps supported on a multiprocessor.
+- sm_efficiency: The percentage of time at least one warp is active on a specific multiprocessor.
+- warp_execution_efficiency: Ratio of the average active threads per warp to the maximum number of threads per warp supported on a multiprocessor.
+- issue_slot_utilization: Percentage of issue slots that issued at least one instruction, averaged across all cycles.
+- stall_exec_dependency: Percentage of stalls occurring because an input required by the instruction is not yet available.
+- stall_memory_dependency: Percentage of stalls occurring because a memory operation cannot be performed due to the required resources not being available or fully utilized, or because too many requests of a given type are outstanding.
+- stall_sync: Percentage of stalls occurring because the warp is blocked at a __syncthreads() call.
+- gld_efficiency: Ratio of requested global memory load throughput to required global memory load throughput expressed as percentage.
+- gst_efficiency: Ratio of requested global memory store throughput to required global memory store throughput expressed as percentage.
+- shared_load_transactions_per_request: Average number of shared memory load transactions performed for each shared memory load.
+- shared_store_transactions_per_request: Average number of shared memory store transactions performed for each shared memory store.

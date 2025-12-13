@@ -23,7 +23,7 @@ typedef struct {
 
 #define G 1.0
 #define SOFTENING 1e-3
-#define SM_SIZE 64
+#define SM_SIZE 256
 #define ILP 1
 
 int read_input(const char *filename, int *N, double *total_time, double *dt, int *dump_interval, BodySoA *soa);
