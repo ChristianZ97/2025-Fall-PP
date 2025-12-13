@@ -1,21 +1,20 @@
+#include <cuda_runtime.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <sys/time.h>
-#include <cuda_runtime.h>
 
-
-double getTimeStamp() {
-    struct timeval tv;
-    gettimeofday( &tv, NULL );
-    return (double) tv.tv_usec/1000000 + tv.tv_sec;
-}
+// double getTimeStamp() {
+//     struct timeval tv;
+//     gettimeofday( &tv, NULL );
+//     return (double) tv.tv_usec/1000000 + tv.tv_sec;
+// }
 
 /* 單一質點 (Body) 的狀態 */
 typedef struct {
-    double x, y, z;      /* position */
-    double vx, vy, vz;   /* velocity */
-    double m;            /* mass */
+    double x, y, z;    /* position */
+    double vx, vy, vz; /* velocity */
+    double m;          /* mass */
 } Body;
 
 /* 物理常數 */
@@ -26,11 +25,9 @@ typedef struct {
 /* GPU Kernels (核心運算邏輯)                               */
 /* -------------------------------------------------------- */
 
-/* Kernel: 計算所有粒子的加速度 (O(N^2)) 
+/* Kernel: 計算所有粒子的加速度 (O(N^2))
    對應原代碼 compute_acceleration */
-__global__ void compute_acceleration_kernel(const Body *bodies, int N, 
-                                            double *ax, double *ay, double *az) 
-{
+__global__ void compute_acceleration_kernel(const Body *bodies, int N, double *ax, double *ay, double *az) {
     // 每個 thread 負責計算一個粒子 i 的加速度
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -43,14 +40,14 @@ __global__ void compute_acceleration_kernel(const Body *bodies, int N,
 
         // 每個 thread 都要遍歷所有其他粒子 j (暴力法)
         for (int j = 0; j < N; ++j) {
-            if (j == i) continue; 
+            if (j == i) continue;
 
             double dx = bodies[j].x - xi;
             double dy = bodies[j].y - yi;
             double dz = bodies[j].z - zi;
-            
-            double distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-            double invDist  = 1.0/sqrt(distSqr); // CUDA 特有的反平方根函數，也可寫 1.0/sqrt(...)
+
+            double distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
+            double invDist = 1.0 / sqrt(distSqr);  // CUDA 特有的反平方根函數，也可寫 1.0/sqrt(...)
             double invDist3 = invDist * invDist * invDist;
 
             double force = G * bodies[j].m * invDist3;
@@ -67,9 +64,7 @@ __global__ void compute_acceleration_kernel(const Body *bodies, int N,
 
 /* Kernel: Leapfrog 第一階段 (更新半步速度 + 更新全步位置)
    對應 step_leapfrog 的第 1, 2 部分 */
-__global__ void update_phase1_kernel(Body *bodies, int N, double dt, 
-                                     const double *ax, const double *ay, const double *az) 
-{
+__global__ void update_phase1_kernel(Body *bodies, int N, double dt, const double *ax, const double *ay, const double *az) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
         // 1) v(t+1/2) = v(t) + 0.5 * a(t) * dt
@@ -86,9 +81,7 @@ __global__ void update_phase1_kernel(Body *bodies, int N, double dt,
 
 /* Kernel: Leapfrog 第二階段 (更新剩下的半步速度)
    對應 step_leapfrog 的第 4 部分 */
-__global__ void update_phase2_kernel(Body *bodies, int N, double dt, 
-                                     const double *ax, const double *ay, const double *az) 
-{
+__global__ void update_phase2_kernel(Body *bodies, int N, double dt, const double *ax, const double *ay, const double *az) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
         // 4) v(t+1) = v(t+1/2) + 0.5 * a(t+1) * dt
@@ -102,10 +95,7 @@ __global__ void update_phase2_kernel(Body *bodies, int N, double dt,
 /* Host Helper Functions (CPU 端讀檔/寫檔)                  */
 /* -------------------------------------------------------- */
 
-int read_input(const char *filename,
-               int *N, double *total_time, double *dt, int *dump_interval,
-               Body **bodies_out)
-{
+int read_input(const char *filename, int *N, double *total_time, double *dt, int *dump_interval, Body **bodies_out) {
     FILE *fin = fopen(filename, "r");
     if (!fin) {
         fprintf(stderr, "Error: cannot open input file %s\n", filename);
@@ -117,9 +107,8 @@ int read_input(const char *filename,
         fclose(fin);
         return 0;
     }
-    
-    if (fscanf(fin, "%lf %lf %d", total_time, dt, dump_interval) != 3 ||
-        *total_time <= 0.0 || *dt <= 0.0 || *dump_interval <= 0) {
+
+    if (fscanf(fin, "%lf %lf %d", total_time, dt, dump_interval) != 3 || *total_time <= 0.0 || *dt <= 0.0 || *dump_interval <= 0) {
         fprintf(stderr, "Error: invalid total_time / dt / dump_interval\n");
         fclose(fin);
         return 0;
@@ -133,10 +122,7 @@ int read_input(const char *filename,
     }
 
     for (int i = 0; i < *N; ++i) {
-        if (fscanf(fin, "%lf %lf %lf %lf %lf %lf %lf",
-                   &bodies[i].x,  &bodies[i].y,  &bodies[i].z,
-                   &bodies[i].vx, &bodies[i].vy, &bodies[i].vz,
-                   &bodies[i].m) != 7) {
+        if (fscanf(fin, "%lf %lf %lf %lf %lf %lf %lf", &bodies[i].x, &bodies[i].y, &bodies[i].z, &bodies[i].vx, &bodies[i].vy, &bodies[i].vz, &bodies[i].m) != 7) {
             fprintf(stderr, "Error: invalid body line at index %d\n", i);
             free(bodies);
             fclose(fin);
@@ -161,12 +147,7 @@ FILE *init_traj_file(const char *filename) {
 
 void dump_traj_step(FILE *ftraj, int step, double t, int N, const Body *bodies) {
     for (int i = 0; i < N; ++i) {
-        fprintf(ftraj,
-                "%d,%.5f,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n",
-                step, t, i,
-                bodies[i].x,  bodies[i].y,  bodies[i].z,
-                bodies[i].vx, bodies[i].vy, bodies[i].vz,
-                bodies[i].m);
+        fprintf(ftraj, "%d,%.5f,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n", step, t, i, bodies[i].x, bodies[i].y, bodies[i].z, bodies[i].vx, bodies[i].vy, bodies[i].vz, bodies[i].m);
     }
 }
 
@@ -180,12 +161,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    double start, end;
-    start = getTimeStamp();
+    // double start, end;
+    // start = getTimeStamp();
 
-    int    N, dump_interval;
+    int N, dump_interval;
     double total_time, dt;
-    Body  *h_bodies = NULL; // host bodies
+    Body *h_bodies = NULL;  // host bodies
 
     // 1. 讀取 Host 端資料
     if (!read_input(argv[1], &N, &total_time, &dt, &dump_interval, &h_bodies)) {
@@ -194,21 +175,21 @@ int main(int argc, char **argv) {
     }
 
     int steps = (int)(total_time / dt);
-    
+
     // 2. 配置 Device (GPU) 記憶體
     Body *d_bodies;
     double *d_ax, *d_ay, *d_az;
 
-    cudaMalloc((void**)&d_bodies, N * sizeof(Body));
-    cudaMalloc((void**)&d_ax, N * sizeof(double));
-    cudaMalloc((void**)&d_ay, N * sizeof(double));
-    cudaMalloc((void**)&d_az, N * sizeof(double));
+    cudaMalloc((void **)&d_bodies, N * sizeof(Body));
+    cudaMalloc((void **)&d_ax, N * sizeof(double));
+    cudaMalloc((void **)&d_ay, N * sizeof(double));
+    cudaMalloc((void **)&d_az, N * sizeof(double));
 
     // 3. 將初始資料從 Host 複製到 Device
     cudaMemcpy(d_bodies, h_bodies, N * sizeof(Body), cudaMemcpyHostToDevice);
 
     FILE *ftraj = init_traj_file(argv[2]);
-    printf("Running GPU simulation: N=%d, steps=%d, dump_interval=%d\n", N, steps, dump_interval);
+    // printf("Running GPU simulation: N=%d, steps=%d, dump_interval=%d\n", N, steps, dump_interval);
 
     // 設定 CUDA Grid/Block
     int blockSize = 256;
@@ -219,7 +200,7 @@ int main(int argc, char **argv) {
     // --- 初始步驟 ---
     // 計算 t=0 加速度 (GPU)
     compute_acceleration_kernel<<<gridSize, blockSize>>>(d_bodies, N, d_ax, d_ay, d_az);
-    cudaDeviceSynchronize(); // 等待 GPU 完成
+    cudaDeviceSynchronize();  // 等待 GPU 完成
 
     // 輸出初始狀態 (需要先將資料複製回 Host)
     cudaMemcpy(h_bodies, d_bodies, N * sizeof(Body), cudaMemcpyDeviceToHost);
@@ -227,7 +208,7 @@ int main(int argc, char **argv) {
 
     // --- 主要迴圈 ---
     for (int s = 1; s <= steps; ++s) {
-        
+
         // 1) v(t+0.5), x(t+1) 更新
         update_phase1_kernel<<<gridSize, blockSize>>>(d_bodies, N, dt, d_ax, d_ay, d_az);
 
@@ -254,10 +235,12 @@ int main(int argc, char **argv) {
     cudaFree(d_ay);
     cudaFree(d_az);
 
-    end = getTimeStamp();
-    printf("Time: %.3f seconds\n", end - start);
+    // end = getTimeStamp();
+    // printf("Time: %.3f seconds\n", end - start);
 
-
-    printf("Done. Output written to %s\n", argv[2]);
+    // printf("Done. Output written to %s\n", argv[2]);
+    clock_t end = clock();
+    double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+    fprintf(stderr, "ELAPSED_TIME: %.6f\n", elapsed);
     return 0;
 }
