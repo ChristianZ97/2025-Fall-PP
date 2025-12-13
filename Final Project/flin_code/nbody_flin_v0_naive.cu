@@ -156,6 +156,7 @@ void dump_traj_step(FILE *ftraj, int step, double t, int N, const Body *bodies) 
 /* -------------------------------------------------------- */
 
 int main(int argc, char **argv) {
+    clock_t start = clock();
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <input_file> <traj_output_csv>\n", argv[0]);
         return 1;
