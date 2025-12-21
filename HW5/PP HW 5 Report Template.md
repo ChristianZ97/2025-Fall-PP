@@ -35,6 +35,8 @@ The diagram illustrates the UCX architecture during the execution of `srun -N 2 
     - `UCX_TLS`
     - TLS selected by UCX
 
+`UCX_TLS` is loaded during the `ucp_config_read` phase, which occurs before `ucp_init`. In `ucp_hello_world.c`, `ucp_config_read(NULL, NULL, &config)` is explicitly called. This function, defined in `src/ucp/core/ucp_context.c`, internally invokes `ucs_config_parser_fill_opts` (defined in `src/ucs/config/parser.c`) to read environment variables, including `UCX_TLS`. This populated configuration is then passed to `ucp_init` to create the UCP context. The TLS selected by UCX is determined during the `ucp_worker_create` phase. While the UCP Context is responsible for discovering all available hardware resources (Devices) during initialization, the specific selection of transports—matching these resources against `UCX_TLS` constraints—happens when the Worker is created. The Worker calculates reachability and selects the optimal transports (e.g., `ud_verbs` for inter-node communication, `shm` for intra-node), storing these selections within its internal structures.
+
 ## 2. Implementation
 > Please complete the implementation according to the [spec](https://docs.google.com/document/d/1fmm0TFpLxbDP7neNcbLDn8nhZpqUBi9NGRzWjgxZaPE/edit?usp=sharing)
 > Describe how you implemented the two special features of HW5.
