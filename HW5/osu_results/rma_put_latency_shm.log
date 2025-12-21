@@ -1,0 +1,37 @@
+[apollo01:352631] SET UCX_TLS=all
+UCX_TLS=all
+0x55e4f23866e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x55fa846df6e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x55fa846df6e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+UCX_TLS=all
+0x55e4f23866e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+# OSU MPI_Put Latency Test v5.3
+# Window creation: MPI_Win_allocate
+# Synchronization: MPI_Win_flush
+# Size          Latency (us)
+0                       0.03
+1                       0.05
+2                       0.04
+4                       0.04
+8                       0.05
+16                      0.05
+32                      0.05
+64                      0.05
+128                     0.05
+256                     0.05
+512                     0.06
+1024                    0.07
+2048                    0.09
+4096                    0.14
+8192                    0.23
+16384                   0.75
+32768                   1.87
+65536                   3.76
+131072                  7.82
+262144                 25.29
+524288                 46.78
+1048576               189.83
+2097152               378.57
+4194304               777.38

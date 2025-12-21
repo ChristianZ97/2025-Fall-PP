@@ -1,0 +1,37 @@
+[apollo01:352649] SET UCX_TLS=ud_verbs
+UCX_TLS=ud_verbs
+0x5625b90486e0 self cfg#0 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x55670caf96e0 self cfg#0 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x5625b90486e0 intra-node cfg#1 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x55670caf96e0 intra-node cfg#1 tag(ud_verbs/ibp3s0:1)
+# OSU MPI_Get latency Test v5.3
+# Window creation: MPI_Win_allocate
+# Synchronization: MPI_Win_flush
+# Size          Latency (us)
+0                       0.03
+1                       0.05
+2                       0.05
+4                       0.05
+8                       0.05
+16                      0.05
+32                      0.05
+64                      0.05
+128                     0.05
+256                     0.05
+512                     0.06
+1024                    0.07
+2048                    0.09
+4096                    0.14
+8192                    0.23
+16384                   0.77
+32768                   1.92
+65536                   3.71
+131072                  8.31
+262144                 23.68
+524288                 52.16
+1048576               191.08
+2097152               382.46
+4194304               742.96

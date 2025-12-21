@@ -1,0 +1,36 @@
+[apollo01:352753] SET UCX_TLS=all
+UCX_TLS=all
+0x55567a7ce6e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x558ffcc066e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x558ffcc066e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+UCX_TLS=all
+0x55567a7ce6e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+# OSU MPI_Put Bandwidth Test v5.3
+# Window creation: MPI_Win_allocate
+# Synchronization: MPI_Win_flush
+# Size      Bandwidth (MB/s)
+1                      24.87
+2                      49.78
+4                     100.60
+8                     202.85
+16                    409.93
+32                    820.35
+64                   1596.95
+128                  3114.84
+256                  5504.00
+512                  9687.34
+1024                12160.63
+2048                14501.90
+4096                15516.75
+8192                11075.10
+16384               11053.64
+32768               11076.88
+65536               11271.80
+131072              10977.23
+262144               5733.92
+524288               5058.52
+1048576              5121.17
+2097152              5114.09
+4194304              5161.82

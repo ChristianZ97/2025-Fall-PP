@@ -1,0 +1,34 @@
+[apollo01:352299] SET UCX_TLS=ud_verbs
+UCX_TLS=ud_verbs
+0x564ab48f06e0 self cfg#0 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x562e124166e0 self cfg#0 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x562e124166e0 intra-node cfg#1 tag(ud_verbs/ibp3s0:1)
+UCX_TLS=ud_verbs
+0x564ab48f06e0 intra-node cfg#1 tag(ud_verbs/ibp3s0:1)
+# OSU MPI Bi-Directional Bandwidth Test v5.3
+# Size      Bandwidth (MB/s)
+1                       3.11
+2                       6.08
+4                      12.62
+8                      25.33
+16                     48.87
+32                     98.01
+64                    186.69
+128                   342.08
+256                   613.04
+512                  1069.01
+1024                 1472.84
+2048                 2217.02
+4096                 2214.67
+8192                 2429.67
+16384                2496.18
+32768                2591.76
+65536                2618.15
+131072               2548.20
+262144               2575.35
+524288               2606.55
+1048576              2585.08
+2097152              2529.56
+4194304              2474.22

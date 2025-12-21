@@ -1,0 +1,34 @@
+[apollo01:352224] SET UCX_TLS=all
+UCX_TLS=all
+0x5616b80546e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x555d8cc9a6e0 self cfg#0 tag(self/memory cma/memory)
+UCX_TLS=all
+0x5616b80546e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+UCX_TLS=all
+0x555d8cc9a6e0 intra-node cfg#1 tag(sysv/memory cma/memory)
+# OSU MPI Bandwidth Test v5.3
+# Size      Bandwidth (MB/s)
+1                       9.04
+2                      18.63
+4                      37.26
+8                      74.77
+16                    149.85
+32                    296.70
+64                    576.44
+128                   671.26
+256                  1244.45
+512                  2219.82
+1024                 3773.79
+2048                 5650.16
+4096                 7932.41
+8192                10052.77
+16384                4871.13
+32768                6638.52
+65536                8104.70
+131072               8952.31
+262144               8217.43
+524288               8383.70
+1048576              8046.71
+2097152              8614.40
+4194304              8288.01
