@@ -89,14 +89,14 @@ mpiucx -n 2 $HOME/UCX-lsalab/test/mpi/osu/pt2pt/osu_bw
 2. Please create a chart to illustrate the impact of different parameter options on various data sizes and the effects of different testsuite.
 3. Based on the chart, explain the impact of different TLS implementations and hypothesize the possible reasons (references required).
 
+The current configuration (`setenv UCX_TLS ud_verbs`) forces UCX to use the InfiniBand network transport (`ud_verbs`) even for intra-node communication. This is inefficient because data must travel through the PCIe bus to the Network Interface Card (NIC) and back (loopback), incurring significant latency and limited bandwidth. To optimize single-node performance, we should enable **Shared Memory** transport mechanisms. This allows processes on the same node to exchange data directly through system RAM (using technologies like Cross Memory Attach or SysV shared memory), bypassing the hardware network stack entirely. We can achieve this by setting the `UCX_TLS` environment variable to: 1) **`all`**: This allows UCX to automatically select the best available transport. For intra-node communication, it prioritizes shared memory (e.g., `shm`, `cma`, `self`) while falling back to network transports for inter-node communication; 2) **`shm,ud_verbs`**: Explicitly enabling shared memory transports alongside network verbs.
+
 <img width="3600" height="2100" alt="rma_put_latency" src="https://github.com/user-attachments/assets/6389a2cf-7987-4485-9d06-624ff3fd6aa9" />
 <img width="3600" height="2100" alt="rma_put_bandwidth" src="https://github.com/user-attachments/assets/0049a58a-7a6d-4ad3-bee1-2740f58c5aeb" />
 <img width="3600" height="2100" alt="rma_get_latency" src="https://github.com/user-attachments/assets/d29ff9b0-2269-4832-96d8-d6838d4abf06" />
 <img width="3600" height="2100" alt="pt2pt_latency" src="https://github.com/user-attachments/assets/faf76a01-d9c4-41d0-a06e-fb3be63db2c9" />
 <img width="3600" height="2100" alt="pt2pt_bibandwidth" src="https://github.com/user-attachments/assets/bc74fde6-10a7-4a58-b746-bf380a26d74a" />
 <img width="3600" height="2100" alt="pt2pt_bandwidth" src="https://github.com/user-attachments/assets/f0d38255-5ce9-49e1-902b-ba3b639297c0" />
-
-The current configuration (`setenv UCX_TLS ud_verbs`) forces UCX to use the InfiniBand network transport (`ud_verbs`) even for intra-node communication. This is inefficient because data must travel through the PCIe bus to the Network Interface Card (NIC) and back (loopback), incurring significant latency and limited bandwidth. To optimize single-node performance, we should enable **Shared Memory** transport mechanisms. This allows processes on the same node to exchange data directly through system RAM (using technologies like Cross Memory Attach or SysV shared memory), bypassing the hardware network stack entirely. We can achieve this by setting the `UCX_TLS` environment variable to: 1) **`all`**: This allows UCX to automatically select the best available transport. For intra-node communication, it prioritizes shared memory (e.g., `shm`, `cma`, `self`) while falling back to network transports for inter-node communication; 2) **`shm,ud_verbs`**: Explicitly enabling shared memory transports alongside network verbs.
 
 **Analysis of Latency:**
 Based on the figure "Point-to-Point Latency Comparison", we observe a dramatic difference in performance for small messages.
@@ -109,6 +109,7 @@ Based on figure "Bandwidth Comparison", Shared Memory outperforms `ud_verbs` sig
 - **Shared Memory**: Peaks at over 10,000 MB/s.
 - **UD Verbs**: Saturates around 2,500 MB/s.
 - **Hypothesis**: The bandwidth of `ud_verbs` is limited by the physical link speed of the InfiniBand interface (e.g., QDR/FDR) or the PCIe bandwidth allocated to the HCA. Shared Memory bandwidth, conversely, is bounded by the system's memory bandwidth (DRAM speed), which is typically much higher than the external network interface speed.
+- **Supplement (Bidirectional)**: The "Bidirectional Bandwidth Comparison" figure further amplifies this gap. While `ud_verbs` bidirectional throughput (~2,500 MB/s) barely exceeds its unidirectional performance (indicating a bottleneck at the PCIe/HCA link), Shared Memory scales impressively to nearly 17,500 MB/s. This demonstrates the full-duplex efficiency of memory buses compared to the hardware limitations of the network loopback.
 
 **Effect of Different Test Suites (Pt2Pt vs. RMA):**
 Comparing "Point-to-Point Latency Comparison" with "RMA Put/Get Latency Comparison" reveals a fascinating distinction between two-sided and one-sided communication.
