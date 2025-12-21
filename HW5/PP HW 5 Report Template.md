@@ -89,6 +89,14 @@ mpiucx -n 2 $HOME/UCX-lsalab/test/mpi/osu/pt2pt/osu_bw
 2. Please create a chart to illustrate the impact of different parameter options on various data sizes and the effects of different testsuite.
 3. Based on the chart, explain the impact of different TLS implementations and hypothesize the possible reasons (references required).
 
+<img width="3600" height="2100" alt="rma_put_latency" src="https://github.com/user-attachments/assets/6389a2cf-7987-4485-9d06-624ff3fd6aa9" />
+<img width="3600" height="2100" alt="rma_put_bandwidth" src="https://github.com/user-attachments/assets/0049a58a-7a6d-4ad3-bee1-2740f58c5aeb" />
+<img width="3600" height="2100" alt="rma_get_latency" src="https://github.com/user-attachments/assets/d29ff9b0-2269-4832-96d8-d6838d4abf06" />
+<img width="3600" height="2100" alt="pt2pt_latency" src="https://github.com/user-attachments/assets/faf76a01-d9c4-41d0-a06e-fb3be63db2c9" />
+<img width="3600" height="2100" alt="pt2pt_bibandwidth" src="https://github.com/user-attachments/assets/bc74fde6-10a7-4a58-b746-bf380a26d74a" />
+<img width="3600" height="2100" alt="pt2pt_bandwidth" src="https://github.com/user-attachments/assets/f0d38255-5ce9-49e1-902b-ba3b639297c0" />
+
+
 
 ### Advanced Challenge: Multi-Node Testing
 
