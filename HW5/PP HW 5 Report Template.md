@@ -96,7 +96,26 @@ mpiucx -n 2 $HOME/UCX-lsalab/test/mpi/osu/pt2pt/osu_bw
 <img width="3600" height="2100" alt="pt2pt_bibandwidth" src="https://github.com/user-attachments/assets/bc74fde6-10a7-4a58-b746-bf380a26d74a" />
 <img width="3600" height="2100" alt="pt2pt_bandwidth" src="https://github.com/user-attachments/assets/f0d38255-5ce9-49e1-902b-ba3b639297c0" />
 
+The current configuration (`setenv UCX_TLS ud_verbs`) forces UCX to use the InfiniBand network transport (`ud_verbs`) even for intra-node communication. This is inefficient because data must travel through the PCIe bus to the Network Interface Card (NIC) and back (loopback), incurring significant latency and limited bandwidth. To optimize single-node performance, we should enable **Shared Memory** transport mechanisms. This allows processes on the same node to exchange data directly through system RAM (using technologies like Cross Memory Attach or SysV shared memory), bypassing the hardware network stack entirely. We can achieve this by setting the `UCX_TLS` environment variable to: 1) **`all`**: This allows UCX to automatically select the best available transport. For intra-node communication, it prioritizes shared memory (e.g., `shm`, `cma`, `self`) while falling back to network transports for inter-node communication; 2) **`shm,ud_verbs`**: Explicitly enabling shared memory transports alongside network verbs.
 
+**Analysis of Latency:**
+Based on the figure "Point-to-Point Latency Comparison", we observe a dramatic difference in performance for small messages.
+- **Shared Memory (Blue Line)**: Achieves extremely low latency. This confirms that bypassing the PCIe/NIC path significantly reduces overhead.
+- **UD Verbs (Red Line)**: Shows much higher latency. This latency is consistent whether running on a single node or across multiple nodes (Green Dotted Line), confirming that `ud_verbs` treats local loopback almost identically to remote transmission—both involve the HCA hardware.
+- **Hypothesis**: The latency reduction with Shared Memory is due to the elimination of hardware transaction overhead. `ud_verbs` requires generating a Work Queue Element (WQE), posting it to the HCA, and waiting for a completion event, whereas `shm` uses CPU instructions (`memcpy` or similar) to move data directly in memory.
+
+**Analysis of Bandwidth:**
+Based on figure "Bandwidth Comparison", Shared Memory outperforms `ud_verbs` significantly for large messages.
+- **Shared Memory**: Peaks at over 10,000 MB/s.
+- **UD Verbs**: Saturates around 2,500 MB/s.
+- **Hypothesis**: The bandwidth of `ud_verbs` is limited by the physical link speed of the InfiniBand interface (e.g., QDR/FDR) or the PCIe bandwidth allocated to the HCA. Shared Memory bandwidth, conversely, is bounded by the system's memory bandwidth (DRAM speed), which is typically much higher than the external network interface speed.
+
+**Effect of Different Test Suites (Pt2Pt vs. RMA):**
+Comparing "Point-to-Point Latency Comparison" with "RMA Put/Get Latency Comparison" reveals a fascinating distinction between two-sided and one-sided communication.
+- **In Two-sided Communication (Pt2Pt)**: There is a massive performance gap between Shared Memory and UD Verbs for small messages. This is because standard MPI Send/Recv involves "matching" overhead (software processing at the receiver to match tag/source) and, in the case of UD Verbs, a full round-trip through the HCA hardware loopback.
+- **In One-sided Communication (RMA)**: Surprisingly, the latency of `ud_verbs` (Red Line) drops significantly, becoming almost indistinguishable from Shared Memory (Blue Line) for small messages. This suggests that for RMA Put/Get operations, UCX can offload the operation entirely to the hardware (RDMA) or optimize the loopback path to bypass the expensive software matching and interrupt overhead required for two-sided messaging. The HCA can directly write/read memory without involving the remote CPU, making `ud_verbs` extremely efficient even in a loopback scenario.
+
+Therefore, while Shared Memory is consistently superior for standard MPI messaging, the advantage diminishes for RMA operations on small data because modern interconnect hardware (and UCX's optimization of it) handles one-sided loopback extremely efficiently.
 
 ### Advanced Challenge: Multi-Node Testing
 
