@@ -27,21 +27,9 @@ Finally, Endpoints are created to establish connections. The calls `status = ucp
     - `ucp_ep`
 > Please provide detailed example information in the diagram corresponding to the execution of the command `srun -N 2 ./send_recv.out` or `mpiucx --host HostA:1,HostB:1 ./send_recv.out`
 
-The diagram illustrates the UCX architecture during the execution of `srun -N 2 ./send_recv.out`, where two MPI processes (Rank 0 and Rank 1) communicate across two separate nodes (Host A and Host B).
+<img width="2160" height="1215" alt="ucx_arch" src="https://github.com/user-attachments/assets/562b726b-e5a2-4d9c-be1e-a07fe8815282" />
 
-**Nodes & Contexts**: 
-    -   **Host A (Rank 0)** and **Host B (Rank 1)** each initialize a `ucp_context`.
-    -   Both contexts detect and utilize the InfiniBand device `ibp3s0:1` as the underlying resource, configured to use the `ud_verbs` transport layer as specified by the environment (`UCX_TLS=ud_verbs`).
-
-**Workers**:
-    -   A `ucp_worker` is created on each host (Addresses: `0x557...` on Host A, `0x556...` on Host B). These workers manage the progress of communication and interface with the network hardware.
-
-**Endpoints (EPs)**:
-    -   **On Host A**: The worker manages two endpoints:
-        -   `ucp_ep (self cfg#0)`: A loopback connection for intra-process communication.
-        -   `ucp_ep (inter-node cfg#1)`: The critical connection established to transmit data to the remote peer (Host B).
-    -   **On Host B**: The worker manages its own `ucp_ep (self cfg#0)` for local operations.
-    -   **Communication Flow**: The dotted arrow represents the transmission of the message "Hello from rank 0". The message originates from Host A, travels through the `inter-node` endpoint using the `ud_verbs` protocol over the physical network, and is received by Host B's worker.
+The diagram illustrates the UCX architecture during the execution of `srun -N 2 ./send_recv.out`, where two MPI processes (Rank 0 and Rank 1) communicate across two separate nodes (Host A and Host B). Host A (Rank 0) and Host B (Rank 1) each initialize a `ucp_context`. Both contexts detect and utilize the InfiniBand device `ibp3s0:1` as the underlying resource, configured to use the `ud_verbs` transport layer as specified by the environment (`UCX_TLS=ud_verbs`). A `ucp_worker` is created on each host (Addresses: `0x557...` on Host A, `0x556...` on Host B). These workers manage the progress of communication and interface with the network hardware. On Host A, the worker manages two endpoints: 1) `ucp_ep (self cfg#0)`: A loopback connection for intra-process communication; 2) `ucp_ep (inter-node cfg#1)`: The critical connection established to transmit data to the remote peer (Host B). On Host B, the worker manages its own `ucp_ep (self cfg#0)` for local operations. The dotted arrow represents the transmission of the message "Hello from rank 0". The message originates from Host A, travels through the `inter-node` endpoint using the `ud_verbs` protocol over the physical network, and is received by Host B's worker.
 
 3. Based on the description in HW5, where do you think the following information is loaded/created?
     - `UCX_TLS`
