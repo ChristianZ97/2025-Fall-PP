@@ -14,11 +14,34 @@ title: PP HW 5 Report Template
     - `ucp_init`
     - `ucp_worker_create`
     - `ucp_ep_create`
+
+Context represents the global scope and resource management for the UCP library. In the code, `status = ucp_init(&ucp_params, config, &ucp_context);` initializes the UCP context. This function uses the configuration read earlier via `ucp_config_read` and the parameters specified in `ucp_params` (which includes features like OOB communication support) to set up the shared resources and capabilities available for the application.
+
+Following context initialization, `status = ucp_worker_create(ucp_context, &worker_params, &ucp_worker);` is called to create a Worker. The Worker is created within the scope of a specific Context and utilizes the resources managed by that Context. It serves as the engine for progress, responsible for processing communication requests, managing operational queues, and polling hardware resources for event completions.
+
+Finally, Endpoints are created to establish connections. The calls `status = ucp_ep_create(ucp_worker, &ep_params, &server_ep);` and `status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);` instantiate Endpoints attached to the specific `ucp_worker`. An Endpoint represents a logical, persistent connection to a specific remote peer (whose details are provided in `ep_params`). An Endpoint cannot exist independently of a Worker, as it relies on the Worker to drive the underlying transport operations for all point-to-point communications.
+
 2. UCX abstracts communication into three layers as below. Please provide a diagram illustrating the architectural design of UCX.
     - `ucp_context`
     - `ucp_worker`
     - `ucp_ep`
 > Please provide detailed example information in the diagram corresponding to the execution of the command `srun -N 2 ./send_recv.out` or `mpiucx --host HostA:1,HostB:1 ./send_recv.out`
+
+The diagram illustrates the UCX architecture during the execution of `srun -N 2 ./send_recv.out`, where two MPI processes (Rank 0 and Rank 1) communicate across two separate nodes (Host A and Host B).
+
+**Nodes & Contexts**: 
+    -   **Host A (Rank 0)** and **Host B (Rank 1)** each initialize a `ucp_context`.
+    -   Both contexts detect and utilize the InfiniBand device `ibp3s0:1` as the underlying resource, configured to use the `ud_verbs` transport layer as specified by the environment (`UCX_TLS=ud_verbs`).
+
+**Workers**:
+    -   A `ucp_worker` is created on each host (Addresses: `0x557...` on Host A, `0x556...` on Host B). These workers manage the progress of communication and interface with the network hardware.
+
+**Endpoints (EPs)**:
+    -   **On Host A**: The worker manages two endpoints:
+        -   `ucp_ep (self cfg#0)`: A loopback connection for intra-process communication.
+        -   `ucp_ep (inter-node cfg#1)`: The critical connection established to transmit data to the remote peer (Host B).
+    -   **On Host B**: The worker manages its own `ucp_ep (self cfg#0)` for local operations.
+    -   **Communication Flow**: The dotted arrow represents the transmission of the message "Hello from rank 0". The message originates from Host A, travels through the `inter-node` endpoint using the `ud_verbs` protocol over the physical network, and is received by Host B's worker.
 
 3. Based on the description in HW5, where do you think the following information is loaded/created?
     - `UCX_TLS`
