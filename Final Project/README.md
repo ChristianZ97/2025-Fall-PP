@@ -7,8 +7,7 @@ Follow these steps to generate data, run simulations, and verify the results. In
 ### Step 1: Generate Initial Conditions
 This script generates an input file with initial positions, velocities, and masses for `<N>` bodies.
 ```
-python gen_input.py <number_of_bodies> <output_filename>
-python gen_input.py <N> input_<N>.txt
+python gen_input.py <N> <output>.csv
 ```
 
 ### Step 2: Compile and Run the Simulation
@@ -23,14 +22,13 @@ make prof # for profiling version
 
 #### Run the simulation
 ```
-srun ./nbody_cpu <input_file> <output_trajectory_file>
-srun -N1 -n1 ./nbody_c input_<N>.txt traj_<N>.csv
+srun -N1 -n1 ./nbody_c <input>.txt <output>.csv
 ```
 
 #### Run the simulation on a GPU node
 ```
-srun ./nbody_gpu <input_file> <output_trajectory_file>
-srun -p nvidia -N1 -n1 --gres=gpu:1 ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 /usr/bin/time -p ./nbody_cu <input>.txt <output>.csv
+srun -p amd -N1 -n1 --gres=gpu:1 /usr/bin/time -p ./nbody_hip <input>.txt <output>.csv
 ```
 
 ### Step 3: Verify Correctness
@@ -40,33 +38,32 @@ This Python script compares the CPU and GPU outputs to ensure they are numerical
 If you have `uv` installed, this command will automatically handle dependencies.
 ```
 uv run ... <cpu_output> <gpu_output>
-uv run --with pandas,numpy compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
+uv run --with pandas,numpy compare_nbody.py <ground_truth>.csv <predict>.csv
 ```
 
 **Option B (Using a Python virtual environment):**
 If you have `pandas` and `numpy` installed in your environment.
 ```
-python compare_nbody.py <cpu_output> <gpu_output>
-python compare_nbody.py traj_<N>.csv traj_<N>_cu.csv
+python compare_nbody.py <ground_truth>.csv <predict>.csv
 ```
 
 ### Step 4: Visualize the Results (Optional)
-To create an animation of the trajectory, first copy the output file (`traj_<N>.csv`) to your local machine.
+To create an animation of the trajectory, first copy the output file (`<output>.csv`) to your local machine.
 
 #### Run the animation script locally
 ```
-python animate.py traj_<N>.csv result_<N>.gif
+python animate.py <output>.csv <animate>.gif
 ```
 
 ### Step 5: Profile the Results (Optional)
 
 #### Profile with Nsight Systems
 ```
-srun -p nvidia -N1 -n1 --gres=gpu:1 nsys profile -o nbody_cu --stats=true ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 nsys profile -o nbody_cu --stats=true ./nbody_cu <input>.txt <output>.csv
 ```
 #### Profile with Nsight Compute (if supported)
 ```
-srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu input_<N>.txt traj_<N>_cu.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 ncu -o nbody_cu --set full ./nbody_cu <input>.txt <output>.csv
 ```
 #### Profile with nvprof
 ```
@@ -77,7 +74,7 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
 --kernels "<your kernel function>" \
 --metrics <metric1>,<metric2>,<metric3> \
-<executable> <input> <output>
+./nbody_cu <input>.txt <output>.csv
 
 
 srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
@@ -96,7 +93,6 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
   ./nbody_cu ./testcases/c1_in.txt temp.csv
 ```
 
-
 - achieved_occupancy: Ratio of the average active warps per active cycle to the maximum number of warps supported on a multiprocessor.
 - sm_efficiency: The percentage of time at least one warp is active on a specific multiprocessor.
 - warp_execution_efficiency: Ratio of the average active threads per warp to the maximum number of threads per warp supported on a multiprocessor.
@@ -108,3 +104,16 @@ srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
 - gst_efficiency: Ratio of requested global memory store throughput to required global memory store throughput expressed as percentage.
 - shared_load_transactions_per_request: Average number of shared memory load transactions performed for each shared memory load.
 - shared_store_transactions_per_request: Average number of shared memory store transactions performed for each shared memory store.
+
+### Step 6: Demo
+
+```
+srun -p nvidia -N1 -n1 --gres=gpu:1 /usr/bin/time -p ./nbody_cu ./testcases/c1_in.txt ./temp.csv
+srun -p nvidia -N1 -n1 --gres=gpu:1 /usr/bin/time -p ./nbody_cu ./testcases/c4_in.txt ./temp.csv
+srun -p amd -N1 -n1 --gres=gpu:1 /usr/bin/time -p ./nbody_hip ./testcases/c4_in.txt ./temp.csv
+
+srun -p nvidia -N1 -n1 --gres=gpu:1 nvprof \
+  --kernels "compute_acceleration_kernel" \
+  --metrics gld_efficiency,gst_efficiency,shared_store_transactions_per_request,achieved_occupancy,sm_efficiency,stall_exec_dependency,stall_memory_dependency,stall_sync \
+  ./nbody_cu ./testcases/c1_in.txt temp.csv
+```
