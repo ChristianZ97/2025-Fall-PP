@@ -1,8 +1,5 @@
 # N-Body Simulation (CPU & GPU)
-This project simulates the N-body problem using both a standard C implementation (CPU) and a CUDA implementation (GPU).
-
-## How to Run
-Follow these steps to generate data, run simulations, and verify the results. In the examples, `<N>` is a placeholder for the number of bodies (e.g., 1000).
+This project simulates the N-body problem using both a standard C implementation (CPU) and a CUDA implementation (GPU). Follow these steps to generate data, run simulations, and verify the results. In the examples, `<N>` is a placeholder for the number of bodies (e.g., 1000).
 
 ### Step 1: Generate Initial Conditions
 This script generates an input file with initial positions, velocities, and masses for `<N>` bodies.
